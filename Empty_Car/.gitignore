@@ -1,0 +1,4 @@
+Debug/
+.vscode/
+*.out
+*.map
