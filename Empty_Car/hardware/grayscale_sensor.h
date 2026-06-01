@@ -42,7 +42,10 @@ extern "C" {
 #define GW_GRAY_I2C_ERROR             0x03
 
 /* 全局数组：存储8路灰度状态 */
-extern uint8_t sensor[2];  /* sensor[0]=左, sensor[1]=右 */
+#define GW_GRAY_CHANNEL_COUNT         16U
+#define GW_GRAY_MODULE_CHANNEL_COUNT  8U
+
+extern uint8_t sensor[GW_GRAY_CHANNEL_COUNT];  /* sensor[0]=1号(最左), sensor[15]=16号(最右) */
 
 /* ================== 用户 API 声明 ================== */
 /**
@@ -124,6 +127,8 @@ unsigned char IIC_Get_Firmware_Version(uint8_t addr);
  * @param  data 8bit 原始位图
  */
 void grayscale_byte_to_sensor_array(uint8_t data);
+void grayscale_dual_byte_to_sensor_array(uint8_t leftData, uint8_t rightData);
+unsigned char grayscale_update_sensor_array(void);
 /**
  * @brief  探测指定地址的灰度模块是否在线
  * @param  addr 从机地址

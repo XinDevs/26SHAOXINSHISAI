@@ -15,11 +15,11 @@
  * 1: 该侧前进/后退逻辑互换
  */
 #ifndef DCMOTOR_LEFT_REVERSE
-#define DCMOTOR_LEFT_REVERSE   (0)
+#define DCMOTOR_LEFT_REVERSE   (1)
 #endif
 
 #ifndef DCMOTOR_RIGHT_REVERSE
-#define DCMOTOR_RIGHT_REVERSE  (0)
+#define DCMOTOR_RIGHT_REVERSE  (1)
 #endif
 
 static DCMotor_Status_t s_motor = {

@@ -22,6 +22,19 @@
 #define W25X_ManufactDeviceID	0x90 
 #define W25X_JedecDeviceID		0x9F 
 
+#define FLASH_TEST_ADDR         0x000F0000UL
+#define FLASH_TEST_LEN          16U
+
+#define FLASH_TEST_OK           0U
+#define FLASH_TEST_ID_FAIL      1U
+#define FLASH_TEST_ERASE_FAIL   2U
+#define FLASH_TEST_WRITE_FAIL   3U
+#define FLASH_TEST_ERASE_TIMEOUT 4U
+#define FLASH_TEST_READ1_TIMEOUT 5U
+#define FLASH_TEST_WRITE_TIMEOUT 6U
+#define FLASH_TEST_READ2_TIMEOUT 7U
+#define FLASH_TEST_WEL_FAIL      8U
+
 /* 片选(CS)引脚控制宏定义 (基于你的 SysConfig 设置) */
 #define FLASH_CS_LOW()      DL_GPIO_clearPins(FLASH_CS_PORT, FLASH_CS_PIN_1_PIN)
 #define FLASH_CS_HIGH()     DL_GPIO_setPins(FLASH_CS_PORT, FLASH_CS_PIN_1_PIN)
@@ -30,10 +43,12 @@
 void Flash_Init(void);
 uint8_t Flash_SPI_SwapByte(uint8_t txData);
 uint16_t Flash_ReadID(void);
+uint8_t Flash_ReadStatus(void);
 void Flash_WriteEnable(void);
-void Flash_WaitBusy(void);
-void Flash_EraseSector(uint32_t SectorAddr);
-void Flash_WritePage(uint32_t Addr, uint8_t *pBuffer, uint16_t NumByteToWrite);
-void Flash_ReadData(uint32_t Addr, uint8_t *pBuffer, uint16_t NumByteToRead);
+uint8_t Flash_WaitBusy(void);
+uint8_t Flash_EraseSector(uint32_t SectorAddr);
+uint8_t Flash_WritePage(uint32_t Addr, uint8_t *pBuffer, uint16_t NumByteToWrite);
+uint8_t Flash_ReadData(uint32_t Addr, uint8_t *pBuffer, uint16_t NumByteToRead);
+uint8_t Flash_Test(uint16_t *idOut);
 
 #endif /* __FLASH_H__ */

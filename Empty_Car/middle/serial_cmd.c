@@ -16,6 +16,7 @@
 #include "encoder.h"
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 /* ===== 模块内缓冲与解析临时变量 =====
  * 所有串口命令解析过程中用到的临时变量均放在本模块内，
@@ -33,7 +34,8 @@ static float s_leftKdNew;
 static float s_rightKpNew;
 static float s_rightKiNew;
 static float s_rightKdNew;
-static float s_grayWeightsNew[2];
+static float s_grayWeightsNew[GW_GRAY_MODULE_CHANNEL_COUNT];
+static float s_paramValues[32];
 static float s_grayKpNew;
 static float s_grayKiNew;
 static float s_grayKdNew;
@@ -53,6 +55,29 @@ static float s_grayKdCur;
 static float s_yawKpCur;
 static float s_yawKiCur;
 static float s_yawKdCur;
+
+static int SerialCmd_ParseFloatList(const char *line, float *values, int maxCount)
+{
+	int count = 0;
+	char *endPtr;
+
+	while ((line != NULL) && (count < maxCount)) {
+		while ((*line == ' ') || (*line == '\t') || (*line == ',') ||
+			   (*line == '\r') || (*line == '\n')) {
+			line++;
+		}
+
+		values[count] = strtof(line, &endPtr);
+		if (endPtr == line) {
+			break;
+		}
+
+		line = endPtr;
+		count++;
+	}
+
+	return count;
+}
 
 /**
  * @brief  串口命令处理入口
@@ -84,27 +109,29 @@ uint8_t SerialCmd_Process(float currentYawDeg)
 		rxCmdLine++;
 	}
 
-	/* 先尝试按 14 浮点格式解析，匹配完整参数下发命令(2权重+3灰度PID+3左速PID+3右速PID+3YawPID)。 */
-	parseCount = sscanf(rxCmdLine,
-						"%f %f %f %f %f %f %f %f %f %f %f %f %f %f",
-						&s_grayWeightsNew[0],
-						&s_grayWeightsNew[1],
-						&s_grayKpNew,
-						&s_grayKiNew,
-						&s_grayKdNew,
-						&s_leftKpNew,
-						&s_leftKiNew,
-						&s_leftKdNew,
-						&s_rightKpNew,
-						&s_rightKiNew,
-						&s_rightKdNew,
-						&s_yawKpNew,
-						&s_yawKiNew,
-						&s_yawKdNew);
+	parseCount = SerialCmd_ParseFloatList(rxCmdLine, s_paramValues, 32);
 
-	if (parseCount == 14) {
-		/* 14 参数命令: 全链路参数更新 + 全环复位。 */
-		PID_SetGrayscaleWeights2(s_grayWeightsNew);
+	if (parseCount == 20) {
+		/* 20 参数命令: 8个左侧灰度权重 + 灰度PID + 左速PID + 右速PID + YawPID。 */
+		int i;
+
+		for (i = 0; i < (int)GW_GRAY_MODULE_CHANNEL_COUNT; i++) {
+			s_grayWeightsNew[i] = s_paramValues[i];
+		}
+		s_grayKpNew = s_paramValues[8];
+		s_grayKiNew = s_paramValues[9];
+		s_grayKdNew = s_paramValues[10];
+		s_leftKpNew = s_paramValues[11];
+		s_leftKiNew = s_paramValues[12];
+		s_leftKdNew = s_paramValues[13];
+		s_rightKpNew = s_paramValues[14];
+		s_rightKiNew = s_paramValues[15];
+		s_rightKdNew = s_paramValues[16];
+		s_yawKpNew = s_paramValues[17];
+		s_yawKiNew = s_paramValues[18];
+		s_yawKdNew = s_paramValues[19];
+
+		PID_SetGrayscaleLeftWeights(s_grayWeightsNew);
 		PID_Grayscale_Init(s_grayKpNew, s_grayKiNew, s_grayKdNew);
 		PID_SPEED_INIT(s_rightKpNew, s_rightKiNew, s_rightKdNew,
 					   s_leftKpNew, s_leftKiNew, s_leftKdNew);
@@ -139,9 +166,18 @@ uint8_t SerialCmd_Process(float currentYawDeg)
 		return 1U;
 	}
 
-	if (parseCount == 5) {
-		/* 5 参数命令: 仅更新灰度权重(2路)与灰度外环 PID。 */
-		PID_SetGrayscaleWeights2(s_grayWeightsNew);
+	if (parseCount == 11) {
+		/* 11 参数命令: 仅更新8个左侧灰度权重与灰度外环 PID。 */
+		int i;
+
+		for (i = 0; i < (int)GW_GRAY_MODULE_CHANNEL_COUNT; i++) {
+			s_grayWeightsNew[i] = s_paramValues[i];
+		}
+		s_grayKpNew = s_paramValues[8];
+		s_grayKiNew = s_paramValues[9];
+		s_grayKdNew = s_paramValues[10];
+
+		PID_SetGrayscaleLeftWeights(s_grayWeightsNew);
 		PID_Grayscale_Init(s_grayKpNew, s_grayKiNew, s_grayKdNew);
 		PID_Reset(GRAYSCALE);
 
@@ -251,7 +287,7 @@ uint8_t SerialCmd_Process(float currentYawDeg)
 		(void)Serial0_SendStringTry("@RST:OK\\r\\n");
 	} else if (strcmp(s_cmd, "?") == 0) {
 		/* 帮助命令: 返回可用格式说明。 */
-		(void)Serial0_SendStringTry("@CMD fmt1=@w0..w7 gkp gki gkd | fmt2=@w0..w7 gkp gki gkd lkp lki lkd rkp rki rkd ykp yki ykd\\r\\n");
+		(void)Serial0_SendStringTry("@CMD fmt1=@w1..w8 gkp gki gkd | fmt2=@w1..w8 gkp gki gkd lkp lki lkd rkp rki rkd ykp yki ykd\\r\\n");
 	} else {
 		/* 未知命令统一回错误提示。 */
 		(void)Serial0_SendStringTry("@ERR unknown cmd\\r\\n");

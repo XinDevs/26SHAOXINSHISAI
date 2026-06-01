@@ -31,13 +31,6 @@ extern "C" {
 #define SPIN_TO_LINE_SPEED_MPS (0.25f)              /* 原地旋转找线速度(m/s) */
 #define SPIN_LINE_DELAY_MS     (500U)               /* 旋转后延迟检测灰度(ms), 防止误判当前线 */
 
-/* Emm_V5 步进电机参数 */
-#define EMM_MOTOR_ADDR         (0x01U)              /* 步进电机驱动器地址 */
-#define EMM_POS_VEL_RPM        (100U)               /* 位置模式目标速度(RPM) */
-#define EMM_POS_ACC            (20U)                /* 位置模式加速度(RPM/s) */
-#define EMM_HALF_TURN_PULSES   (1600U)              /* 半圈脉冲数 */
-#define EMM_ORIGIN_MODE        (0U)                 /* 回零模式 */
-
 /* IMU航向角反馈量, 由 main.c 中断更新 */
 extern volatile float g_currentYaw;
 
@@ -45,7 +38,6 @@ extern volatile float g_currentYaw;
 extern uint8_t  g_taskId;                /* 当前任务编号: 0=待机, 1=巡线, 2=航向直行, 3=电机测试 */
 extern float    target_straight_yaw;     /* 任务2航向直行目标航向角(deg) */
 extern volatile uint8_t g_buzzerRequestFlag; /* 蜂鸣器请求标志: 1=请求响一次 */
-extern uint8_t  g_gimbalZeroSetDone;     /* 云台零点设置完成标志: 1=已设置 */
 
 int main(void);
 void TIMER_FOR_1MS_INST_IRQHandler(void);

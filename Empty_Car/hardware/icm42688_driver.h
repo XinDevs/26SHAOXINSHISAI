@@ -19,7 +19,7 @@ extern "C" {
  * 用户可按硬件改这两个宏
  * ========================= */
 #ifndef ICM42688_SPI_INST
-#define ICM42688_SPI_INST              SPI_0_INST
+#define ICM42688_SPI_INST              SPI_ICM_INST
 #endif
 
 #ifndef ICM42688_CS_PORT

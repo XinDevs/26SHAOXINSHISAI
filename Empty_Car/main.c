@@ -20,11 +20,9 @@
 #include "serial_maixcam.h"
 #include "oled_ui.h"
 #include "OLED.h"
-#include "Emm_V5.h"
 #include "grayscale_sensor.h"
 #include "MahonyAHRS.h"
 #include "icm42688_driver.h"
-#include "Emm_V5_status.h"
 #include "main.h"
 #include "menu.h"
 #include <stdio.h>
@@ -42,7 +40,6 @@ static volatile uint32_t g_sysTickMs            = 0U;
 uint8_t  g_taskId            = 0U;   /* 当前任务编号: 0=待机, 1=巡线, 2=航向直行, 3=电机测试 */
 float    target_straight_yaw = 0.0f; /* 任务2航向直行目标航向角(deg) */
 volatile uint8_t g_buzzerRequestFlag = 0U; /* 蜂鸣器请求标志 */
-uint8_t  g_gimbalZeroSetDone = 0U;  /* 云台零点设置完成标志 */
 
 /* ===== 蜂鸣器非阻塞控制 ===== */
 static volatile uint16_t g_buzzerRemainMs       = 0U;
@@ -69,7 +66,7 @@ int main(void)
     Serial0_Init();
     Serial1_Init();
     SerialMaixCam_Init();
-    EmmV5Status_Reset();
+    Flash_Init();
     Serial0_SendString("@BOOT:Serial Ready\r\n");
     imuId = Init_ICM42688();
 
@@ -101,16 +98,7 @@ int main(void)
         keyNum = Key_GetNum();
         if (keyNum != 0U) {
             Menu_ProcessKey(keyNum);
-            /* 回零点设置模式: K2设置零点, K4退出并重新使能电机 */
-            if (Menu_GetMode() == SYS_GIMBAL_SETZERO) {
-                if (keyNum == 2U) {
-                    Emm_V5_Origin_Set_O(EMM_MOTOR_ADDR, true);
-                    g_gimbalZeroSetDone = 1U;
-                    g_buzzerRequestFlag = 1U;
-                } else if (keyNum == 4U) {
-                    Emm_V5_En_Control(EMM_MOTOR_ADDR, true, false);
-                }
-            }
+            g_oledRefreshFlag = 1U;
         }
 
         if ((Menu_GetMode() == SYS_TASK_RUN) && (g_taskId == 3U)) {
@@ -121,14 +109,7 @@ int main(void)
         if (g_speedPidPendingCount > 0U) {
             g_speedPidPendingCount = 0U;
 
-            /* 灰度传感器读取: 左右各一个模块 */
-            // {
-            //     uint8_t grayLeft = 0U, grayRight = 0U;
-            //     IIC_Get_Digtal_Ex(GW_GRAY_ADDR_SENSOR_LEFT, &grayLeft);
-            //     IIC_Get_Digtal_Ex(GW_GRAY_ADDR_SENSOR_RIGHT, &grayRight);
-            //     sensor[0] = ((grayLeft & 0x01U) == 0U) ? 1U : 0U;   /* 左: bit0取反 */
-            //     sensor[1] = ((grayRight & 0x01U) == 0U) ? 1U : 0U;  /* 右: bit0取反 */
-            // }
+            (void)grayscale_update_sensor_array();
 
             /* 仅在任务运行模式下执行PID控制 */
             if (Menu_GetMode() != SYS_TASK_RUN) {
@@ -186,6 +167,10 @@ int main(void)
                 case SYS_MENU:
                 case SYS_MONITOR:
                 case SYS_PID_EDIT:
+                case SYS_FLASH_TEST:
+                case SYS_GRAY_TEST:
+                case SYS_CAMERA_TEST:
+                case SYS_OLED_CN_TEST:
                     Menu_Render();
                     break;
 
@@ -193,7 +178,9 @@ int main(void)
                     OLED_Clear();
                     if (g_taskId == 4U) {
                         /* 任务4: 中文字模测试 */
-                        OLED_Printf(0, 0,  OLED_8X16, "一二");
+                        OLED_Printf(0, 0,  OLED_8X16, "一二三四五");
+                        OLED_Printf(0, 16,  OLED_8X16, "红绿圆方弃");
+                        OLED_Printf(0, 32,  OLED_8X16, "巡检用时秒");
                     } 
                     else {
                         /* 通用任务运行显示 */
@@ -209,18 +196,6 @@ int main(void)
                     OLED_Update();
                     break;
 
-                case SYS_GIMBAL_SETZERO:
-                    OLED_Clear();
-                    OLED_Printf(0, 0,  OLED_8X16, "Set Zero");
-                    OLED_Printf(0, 16, OLED_6X8, "Motor disabled");
-                    OLED_Printf(0, 24, OLED_6X8, "Rotate gimbal to");
-                    OLED_Printf(0, 32, OLED_6X8, "desired zero pos");
-                    OLED_Printf(0, 48, OLED_6X8, "K2:Set K4:Exit");
-                    if (g_gimbalZeroSetDone != 0U) {
-                        OLED_Printf(0, 56, OLED_6X8, "> Zero Saved!");
-                    }
-                    OLED_Update();
-                    break;
             }
         }
     }

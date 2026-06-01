@@ -9,14 +9,23 @@
 #include "main.h"
 #include <math.h>
 
-/* ===== 灰度 2 路权重表 =====
- * 约定: gGrayscaleWeights2[i] 与 sensor[i] 一一对应
- * 含义: 用于将 2 路数字灰度映射为"横向位置误差"(中心约为 0)
- * 布局: [0]-左(正值, 偏左时正偏) [1]-右(负值, 偏右时负偏)
+/* ===== 灰度左半区权重表 =====
+ * 只维护 1~8 号左侧灰度权重，9~16 号右侧权重自动镜像取负。
+ * 例: sensor[0] 权重为 +1.0000f, sensor[15] 权重自动为 -1.0000f。
  */
-static float gGrayscaleWeights2[2] = {
-    1.0f, -1.0f
+static float gGrayscaleLeftWeights[GW_GRAY_MODULE_CHANNEL_COUNT] = {
+    1.0000f,  0.8667f,  0.7333f,  0.6000f,
+    0.4667f,  0.3333f,  0.2000f,  0.0667f
 };
+
+static float PID_GetGrayscaleWeight(uint8_t index)
+{
+    if (index < GW_GRAY_MODULE_CHANNEL_COUNT) {
+        return gGrayscaleLeftWeights[index];
+    }
+
+    return -gGrayscaleLeftWeights[GW_GRAY_CHANNEL_COUNT - 1U - index];
+}
 /**
  * @brief  灰度巡线环参数初始化
  */
@@ -39,7 +48,7 @@ void PID_UpdateYawFeedback(float yawDeg)
 }
 
 /**
- * @brief 基于2路灰度状态计算加权位置（中心为0）
+ * @brief 基于16路灰度状态计算加权位置（中心为0）
  * @retval 位置误差，范围[-1.0, 1.0]
  */
 float PID_GetGrayscaleWeightedPosition(void)
@@ -49,12 +58,12 @@ float PID_GetGrayscaleWeightedPosition(void)
     uint8_t active_count = 0U;
     static float last_position = 0.0f;
 
-    /* 2路直接加权：sensor[i] 对应 gGrayscaleWeights2[i]
+    /* 16路直接加权：sensor[i] 对应 gGrayscaleWeights[i]
      * 约定: sensor[i]=1 表示检测到黑线，sensor[i]=0 表示白地
      */
-    for (i = 0U; i < 2U; i++) {
+    for (i = 0U; i < GW_GRAY_CHANNEL_COUNT; i++) {
         if (sensor[i] != 0U) {
-            weighted_sum += gGrayscaleWeights2[i];
+            weighted_sum += PID_GetGrayscaleWeight(i);
             active_count++;
         }
     }
@@ -116,25 +125,74 @@ void PID_ExecuteGrayCascade(float baseSpeedMps, float targetPosition,
 }
 
 /**
- * @brief 设置灰度 2 路权重
+ * @brief 设置灰度 16 路权重
  */
+void PID_SetGrayscaleWeights(const float weights[GW_GRAY_CHANNEL_COUNT])
+{
+    if (weights == NULL) {
+        return;
+    }
+
+    PID_SetGrayscaleLeftWeights(weights);
+}
+
+/**
+ * @brief 读取灰度 16 路权重
+ */
+void PID_GetGrayscaleWeights(float weightsOut[GW_GRAY_CHANNEL_COUNT])
+{
+    uint8_t i;
+
+    if (weightsOut == NULL) {
+        return;
+    }
+
+    for (i = 0U; i < GW_GRAY_CHANNEL_COUNT; i++) {
+        weightsOut[i] = PID_GetGrayscaleWeight(i);
+    }
+}
+
+void PID_SetGrayscaleLeftWeights(const float weights[GW_GRAY_MODULE_CHANNEL_COUNT])
+{
+    uint8_t i;
+
+    if (weights == NULL) {
+        return;
+    }
+
+    for (i = 0U; i < GW_GRAY_MODULE_CHANNEL_COUNT; i++) {
+        gGrayscaleLeftWeights[i] = weights[i];
+    }
+}
+
+void PID_GetGrayscaleLeftWeights(float weightsOut[GW_GRAY_MODULE_CHANNEL_COUNT])
+{
+    uint8_t i;
+
+    if (weightsOut == NULL) {
+        return;
+    }
+
+    for (i = 0U; i < GW_GRAY_MODULE_CHANNEL_COUNT; i++) {
+        weightsOut[i] = gGrayscaleLeftWeights[i];
+    }
+}
+
 void PID_SetGrayscaleWeights2(const float weights[2])
 {
     if (weights == NULL) {
         return;
     }
-    gGrayscaleWeights2[0] = weights[0];
-    gGrayscaleWeights2[1] = weights[1];
+
+    gGrayscaleLeftWeights[0] = weights[0];
 }
 
-/**
- * @brief 读取灰度 2 路权重
- */
 void PID_GetGrayscaleWeights2(float weightsOut[2])
 {
     if (weightsOut == NULL) {
         return;
     }
-    weightsOut[0] = gGrayscaleWeights2[0];
-    weightsOut[1] = gGrayscaleWeights2[1];
+
+    weightsOut[0] = gGrayscaleLeftWeights[0];
+    weightsOut[1] = -gGrayscaleLeftWeights[0];
 }

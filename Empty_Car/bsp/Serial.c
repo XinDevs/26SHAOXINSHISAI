@@ -2,11 +2,10 @@
  * @file    Serial.c
  * @brief   串口 UART 通信驱动
  * @details 基于 MSPM0 UART + DMA 实现收发。
- * 采用单套接口，通过 uartId 选择 UART0/UART1/UART2。
+ * 采用单套接口，通过 uartId 选择 UART_BLUETOOTH/UART_STEPMOTOR/UART_CAM。
  */
 
 #include "Serial.h"
-#include "Emm_V5_status.h"
 
 #include "ti_msp_dl_config.h"
 #include "ti/driverlib/dl_dma.h"
@@ -120,11 +119,11 @@ static uint8_t Serial_GetRxDmaChannel(uint8_t uartId)
 static uint32_t Serial_GetTxDataAddr(uint8_t uartId)
 {
     if (uartId == SERIAL_UART2) {
-        return (uint32_t) (uintptr_t) &(UART_2_INST->TXDATA);
+        return (uint32_t) (uintptr_t) &(UART_CAM_INST->TXDATA);
     } else if (uartId == SERIAL_UART1) {
-        return (uint32_t) (uintptr_t) &(UART_1_INST->TXDATA);
+        return (uint32_t) (uintptr_t) &(UART_STEPMOTOR_INST->TXDATA);
     }
-    return (uint32_t) (uintptr_t) &(UART_0_INST->TXDATA);
+    return (uint32_t) (uintptr_t) &(UART_BLUETOOTH_INST->TXDATA);
 }
 
 /**
@@ -133,11 +132,11 @@ static uint32_t Serial_GetTxDataAddr(uint8_t uartId)
 static uint32_t Serial_GetRxDataAddr(uint8_t uartId)
 {
     if (uartId == SERIAL_UART2) {
-        return (uint32_t) (uintptr_t) &(UART_2_INST->RXDATA);
+        return (uint32_t) (uintptr_t) &(UART_CAM_INST->RXDATA);
     } else if (uartId == SERIAL_UART1) {
-        return (uint32_t) (uintptr_t) &(UART_1_INST->RXDATA);
+        return (uint32_t) (uintptr_t) &(UART_STEPMOTOR_INST->RXDATA);
     }
-    return (uint32_t) (uintptr_t) &(UART_0_INST->RXDATA);
+    return (uint32_t) (uintptr_t) &(UART_BLUETOOTH_INST->RXDATA);
 }
 
 /**
@@ -320,25 +319,25 @@ void Serial_Init(uint8_t uartId)
 
     if (uartId == SERIAL_UART2) {
         DL_UART_Main_enableInterrupt(
-            UART_2_INST,
+            UART_CAM_INST,
             DL_UART_MAIN_INTERRUPT_DMA_DONE_TX | DL_UART_MAIN_INTERRUPT_DMA_DONE_RX);
         Serial_StartRxDMA(uartId, s_rxDmaActiveIndex[uartId]);
-        NVIC_ClearPendingIRQ(UART_2_INST_INT_IRQN);
-        NVIC_EnableIRQ(UART_2_INST_INT_IRQN);
+        NVIC_ClearPendingIRQ(UART_CAM_INST_INT_IRQN);
+        NVIC_EnableIRQ(UART_CAM_INST_INT_IRQN);
     } else if (uartId == SERIAL_UART1) {
         DL_UART_Main_enableInterrupt(
-            UART_1_INST,
+            UART_STEPMOTOR_INST,
             DL_UART_MAIN_INTERRUPT_DMA_DONE_TX | DL_UART_MAIN_INTERRUPT_DMA_DONE_RX);
         Serial_StartRxDMA(uartId, s_rxDmaActiveIndex[uartId]);
-        NVIC_ClearPendingIRQ(UART_1_INST_INT_IRQN);
-        NVIC_EnableIRQ(UART_1_INST_INT_IRQN);
+        NVIC_ClearPendingIRQ(UART_STEPMOTOR_INST_INT_IRQN);
+        NVIC_EnableIRQ(UART_STEPMOTOR_INST_INT_IRQN);
     } else {
         DL_UART_Main_enableInterrupt(
-            UART_0_INST,
+            UART_BLUETOOTH_INST,
             DL_UART_MAIN_INTERRUPT_DMA_DONE_TX | DL_UART_MAIN_INTERRUPT_DMA_DONE_RX);
         Serial_StartRxDMA(uartId, s_rxDmaActiveIndex[uartId]);
-        NVIC_ClearPendingIRQ(UART_0_INST_INT_IRQN);
-        NVIC_EnableIRQ(UART_0_INST_INT_IRQN);
+        NVIC_ClearPendingIRQ(UART_BLUETOOTH_INST_INT_IRQN);
+        NVIC_EnableIRQ(UART_BLUETOOTH_INST_INT_IRQN);
     }
 }
 
@@ -588,11 +587,11 @@ static void Serial_UART_IRQHandlerCommon(uint8_t uartId)
     }
 
     if (uartId == SERIAL_UART2) {
-        iidx = DL_UART_getPendingInterrupt(UART_2_INST);
+        iidx = DL_UART_getPendingInterrupt(UART_CAM_INST);
     } else if (uartId == SERIAL_UART1) {
-        iidx = DL_UART_getPendingInterrupt(UART_1_INST);
+        iidx = DL_UART_getPendingInterrupt(UART_STEPMOTOR_INST);
     } else {
-        iidx = DL_UART_getPendingInterrupt(UART_0_INST);
+        iidx = DL_UART_getPendingInterrupt(UART_BLUETOOTH_INST);
     }
 
     if (iidx == DL_UART_IIDX_DMA_DONE_RX) {
@@ -601,12 +600,6 @@ static void Serial_UART_IRQHandlerCommon(uint8_t uartId)
         byte = s_rxDmaStaging[uartId][s_rxDmaActiveIndex[uartId]];
         s_rxDmaActiveIndex[uartId] ^= 1U;
         Serial_StartRxDMA(uartId, s_rxDmaActiveIndex[uartId]);
-        
-        // 保留原有的 UART1 步进电机解析回调
-        if (uartId == SERIAL_UART1) {
-            EmmV5Status_OnUart1Byte(byte);
-        }
-        
         Serial_PushReceivedByte(uartId, byte);
     } else if (iidx == DL_UART_IIDX_DMA_DONE_TX) {
         if (s_txPendingBuf[uartId] != SERIAL_BUF_INVALID) {
@@ -624,25 +617,25 @@ static void Serial_UART_IRQHandlerCommon(uint8_t uartId)
 }
 
 /**
- * @brief  UART0 中断服务函数
+ * @brief  蓝牙串口中断服务函数
  */
-void UART_0_INST_IRQHandler(void)
+void UART_BLUETOOTH_INST_IRQHandler(void)
 {
     Serial_UART_IRQHandlerCommon(SERIAL_UART0);
 }
 
 /**
- * @brief  UART1 中断服务函数
+ * @brief  步进电机串口中断服务函数
  */
-void UART_1_INST_IRQHandler(void)
+void UART_STEPMOTOR_INST_IRQHandler(void)
 {
     Serial_UART_IRQHandlerCommon(SERIAL_UART1);
 }
 
 /**
- * @brief  UART2 中断服务函数
+ * @brief  摄像头串口中断服务函数
  */
-void UART_2_INST_IRQHandler(void)
+void UART_CAM_INST_IRQHandler(void)
 {
     Serial_UART_IRQHandlerCommon(SERIAL_UART2);
 }

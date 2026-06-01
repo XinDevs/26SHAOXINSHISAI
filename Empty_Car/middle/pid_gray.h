@@ -7,6 +7,7 @@
 #define __PID_GRAY_H
 
 #include <stdint.h>
+#include "grayscale_sensor.h"
 
 /**
  * @brief  灰度巡线环参数初始化
@@ -33,12 +34,16 @@ float PID_Calculate_GrayscaleSpeedDiff(float targetPosition, float speedDiffScal
  */
 void PID_ExecuteGrayCascade(float baseSpeedMps, float targetPosition,
                             float speedDiffScale, float yawForReportDeg);
+void PID_SetGrayscaleWeights(const float weights[GW_GRAY_CHANNEL_COUNT]);
+void PID_GetGrayscaleWeights(float weightsOut[GW_GRAY_CHANNEL_COUNT]);
+void PID_SetGrayscaleLeftWeights(const float weights[GW_GRAY_MODULE_CHANNEL_COUNT]);
+void PID_GetGrayscaleLeftWeights(float weightsOut[GW_GRAY_MODULE_CHANNEL_COUNT]);
 /**
- * @brief  设置灰度 2 路权重
+ * @brief  设置灰度 2 路兼容权重
  */
 void PID_SetGrayscaleWeights2(const float weights[2]);
 /**
- * @brief  读取灰度 2 路权重
+ * @brief  读取灰度 2 路兼容权重
  */
 void PID_GetGrayscaleWeights2(float weightsOut[2]);
 

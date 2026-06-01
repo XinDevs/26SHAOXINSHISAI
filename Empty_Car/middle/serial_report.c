@@ -16,7 +16,7 @@
 
 static char s_speedLine[320];
 static char s_pidTimingLine[96];
-static char s_grayBitsLine[3];
+static char s_grayBitsLine[GW_GRAY_CHANNEL_COUNT + 1U];
 
 /**
  * @brief  执行一次状态上报
@@ -64,11 +64,11 @@ uint8_t SerialReport_Process(volatile uint8_t *eventFlag,
     PID_GetParameters(MOTOR_RIGHT, NULL, NULL, &rightKdCur);
     grayError = PID_GetGrayscaleWeightedPosition();
 
-    /* 将 2 路灰度状态转为 2 位字符显示，便于上位机可视化。 */
-    for (i = 0U; i < 2U; i++) {
+    /* 将 16 路灰度状态转为 16 位字符显示，1号在最左。 */
+    for (i = 0U; i < GW_GRAY_CHANNEL_COUNT; i++) {
         s_grayBitsLine[i] = (sensor[i] != 0U) ? '1' : '0';
     }
-    s_grayBitsLine[2] = '\0';
+    s_grayBitsLine[GW_GRAY_CHANNEL_COUNT] = '\0';
 
     /* @DAT: 运行状态上报(任务号/航向/目标与实测速度/外环差速等)。 */
     speedLen = snprintf(s_speedLine,

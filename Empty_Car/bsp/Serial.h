@@ -1,7 +1,7 @@
 ﻿/**
  * @file    Serial.h
  * @brief   串口UART通信驱动 — 头文件
- * @details 单套API通过 uartId 选择 UART0/UART1/UART2，支持 DMA 收发与帧解析。
+ * @details 单套API通过 uartId 选择蓝牙/步进电机/摄像头串口，支持 DMA 收发与帧解析。
  */
 #ifndef SERIAL_H_
 #define SERIAL_H_
@@ -12,11 +12,14 @@
 extern "C" {
 #endif
 
-/* 将端口数量从 2 改为 3 */
 #define SERIAL_PORT_COUNT      3U
-#define SERIAL_UART0           0U
-#define SERIAL_UART1           1U
-#define SERIAL_UART2           2U  /* 新增串口2宏定义 */
+#define SERIAL_UART_BLUETOOTH  0U
+#define SERIAL_UART_STEPMOTOR  1U
+#define SERIAL_UART_CAM        2U
+
+#define SERIAL_UART0           SERIAL_UART_BLUETOOTH
+#define SERIAL_UART1           SERIAL_UART_STEPMOTOR
+#define SERIAL_UART2           SERIAL_UART_CAM
 
 #define SERIAL_PACKET_SIZE     128U
 #define SERIAL_TX_BUFFER_SIZE  128U

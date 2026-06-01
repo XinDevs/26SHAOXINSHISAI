@@ -10,7 +10,7 @@
 
 #define GW_GRAY_I2C_TIMEOUT_CNT    (200000U)
 
-uint8_t sensor[2] = {0};  /* sensor[0]=左(bit3), sensor[1]=右(bit4) */
+uint8_t sensor[GW_GRAY_CHANNEL_COUNT] = {0};  /* sensor[0]=1号(最左), sensor[15]=16号(最右) */
 
 /* ============== 内部私有底层 I2C 实现 ===================*/
 
@@ -284,6 +284,37 @@ unsigned char IIC_Software_Reset(uint8_t addr) {
  */
 void grayscale_byte_to_sensor_array(uint8_t data)
 {
-    sensor[0] = ((data & (1U << 3)) == 0U) ? 1U : 0U;  /* bit3: 左 */
-    sensor[1] = ((data & (1U << 4)) == 0U) ? 1U : 0U;  /* bit4: 右 */
+    uint8_t i;
+
+    for (i = 0U; i < GW_GRAY_MODULE_CHANNEL_COUNT; i++) {
+        sensor[i] = ((data & (1U << i)) == 0U) ? 1U : 0U;
+    }
+}
+
+void grayscale_dual_byte_to_sensor_array(uint8_t leftData, uint8_t rightData)
+{
+    uint8_t i;
+
+    for (i = 0U; i < GW_GRAY_MODULE_CHANNEL_COUNT; i++) {
+        sensor[i] = ((leftData & (1U << i)) == 0U) ? 1U : 0U;
+        sensor[i + GW_GRAY_MODULE_CHANNEL_COUNT] =
+            ((rightData & (1U << i)) == 0U) ? 1U : 0U;
+    }
+}
+
+unsigned char grayscale_update_sensor_array(void)
+{
+    uint8_t grayLeft = 0U;
+    uint8_t grayRight = 0U;
+
+    if (IIC_Get_Digtal_Ex(GW_GRAY_ADDR_SENSOR_LEFT, &grayLeft) != GW_GRAY_OK) {
+        return GW_GRAY_I2C_ERROR;
+    }
+
+    if (IIC_Get_Digtal_Ex(GW_GRAY_ADDR_SENSOR_RIGHT, &grayRight) != GW_GRAY_OK) {
+        return GW_GRAY_I2C_ERROR;
+    }
+
+    grayscale_dual_byte_to_sensor_array(grayLeft, grayRight);
+    return GW_GRAY_OK;
 }
