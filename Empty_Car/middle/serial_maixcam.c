@@ -14,8 +14,8 @@
 #include <string.h>
 
 /* 模块内接收缓冲 */
-static char s_rxLocal[SERIAL_PACKET_SIZE];
 static char s_cmdBuf[SERIAL_PACKET_SIZE];
+static uint8_t s_resultCode = SERIAL_MAIXCAM_RESULT_NONE;
 
 /* 发送拼包缓冲 */
 static char s_txBuf[SERIAL_PACKET_SIZE];
@@ -27,7 +27,7 @@ void SerialMaixCam_Init(void)
 
 uint8_t SerialMaixCam_Process(void)
 {
-    char *rxCmdLine;
+    uint8_t payload;
 
     /* 无新数据到达，直接返回 */
     if (Serial_RxFlag[SERIAL_UART2] == 0U) {
@@ -37,18 +37,36 @@ uint8_t SerialMaixCam_Process(void)
     /* 临界区：拷贝中断接收缓冲到本地，防止拷贝过程中被中断覆盖 */
     __disable_irq();
     Serial_RxFlag[SERIAL_UART2] = 0U;
-    (void)strncpy(s_rxLocal, Serial_RxPacket[SERIAL_UART2], SERIAL_PACKET_SIZE - 1U);
-    s_rxLocal[SERIAL_PACKET_SIZE - 1U] = '\0';
+    payload = (uint8_t)Serial_RxPacket[SERIAL_UART2][0];
     __enable_irq();
 
-    /* 跳过协议前缀 '@'，提取有效载荷 */
-    rxCmdLine = s_rxLocal;
-    if (rxCmdLine[0] == '@') {
-        rxCmdLine++;
-    }
+    /* Decode binary result payload. */
+    s_resultCode = payload;
+    switch (payload) {
+        case SERIAL_MAIXCAM_RESULT_NONE:
+            (void)strncpy(s_cmdBuf, "None", SERIAL_PACKET_SIZE - 1U);
+            break;
 
-    /* 存入命令缓冲区，供 GetCommand() 读取 */
-    (void)strncpy(s_cmdBuf, rxCmdLine, SERIAL_PACKET_SIZE - 1U);
+        case SERIAL_MAIXCAM_RESULT_RED_CIRCLE:
+            (void)strncpy(s_cmdBuf, "RedCircle", SERIAL_PACKET_SIZE - 1U);
+            break;
+
+        case SERIAL_MAIXCAM_RESULT_RED_SQUARE:
+            (void)strncpy(s_cmdBuf, "RedSquare", SERIAL_PACKET_SIZE - 1U);
+            break;
+
+        case SERIAL_MAIXCAM_RESULT_GREEN_CIRCLE:
+            (void)strncpy(s_cmdBuf, "GreenCircle", SERIAL_PACKET_SIZE - 1U);
+            break;
+
+        case SERIAL_MAIXCAM_RESULT_GREEN_SQUARE:
+            (void)strncpy(s_cmdBuf, "GreenSquare", SERIAL_PACKET_SIZE - 1U);
+            break;
+
+        default:
+            (void)snprintf(s_cmdBuf, SERIAL_PACKET_SIZE, "Unknown:%02X", (unsigned int)payload);
+            break;
+    }
     s_cmdBuf[SERIAL_PACKET_SIZE - 1U] = '\0';
 
     return 1U;
@@ -57,6 +75,11 @@ uint8_t SerialMaixCam_Process(void)
 const char *SerialMaixCam_GetCommand(void)
 {
     return s_cmdBuf;
+}
+
+uint8_t SerialMaixCam_GetResultCode(void)
+{
+    return s_resultCode;
 }
 
 uint8_t SerialMaixCam_SendCommand(const char *cmd)

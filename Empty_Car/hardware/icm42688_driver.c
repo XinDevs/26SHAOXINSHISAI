@@ -6,6 +6,7 @@
  */
 #include "icm42688_driver.h"
 #include "delay.h"
+#include "MahonyAHRS.h"
 
 float icm42688_acc_x = 0.0f;
 float icm42688_acc_y = 0.0f;
@@ -22,8 +23,12 @@ static float acc_offset_x = 0.0f;
 static float acc_offset_y = 0.0f;
 static float acc_offset_z = 0.0f;
 
+static float yaw_zero_offset = 0.0f;
+
 static const float ACC_SENSITIVITY = 16.0f / 32768.0f;
 static const float GYRO_SENSITIVITY = 2000.0f / 32768.0f;
+
+
 
 /**
  * @brief  清空 SPI 接收 FIFO
@@ -229,4 +234,28 @@ void IMU_Calibrate(void)
     gyro_offset_x = sum_x / (float)samples;
     gyro_offset_y = sum_y / (float)samples;
     gyro_offset_z = sum_z / (float)samples;
+}
+
+/**
+ * @brief  获取带零点偏移的Yaw角(度)
+ * @retval Yaw角(度), 范围 -180 ~ +180
+ */
+float ICM42688_GetYawZeroedDeg(void)
+{
+    float yaw = getYaw();
+    float diff = yaw - yaw_zero_offset;
+
+    /* 将差值归一化到 -180 ~ +180 */
+    while (diff > 180.0f)  diff -= 360.0f;
+    while (diff < -180.0f) diff += 360.0f;
+
+    return diff;
+}
+
+/**
+ * @brief  将当前Yaw角设为零点
+ */
+void ICM42688_ResetYawZero(void)
+{
+    yaw_zero_offset = getYaw();
 }

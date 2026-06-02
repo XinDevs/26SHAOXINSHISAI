@@ -11,8 +11,9 @@
 #include "dc_motor.h"
 #include <math.h>
 
-/* 左轮编码器: E1B 测速
- * 右轮编码器: E2A 测速
+/* 编码器引脚调换后(已修改):
+ * 左轮编码器绑定为: E2A
+ * 右轮编码器绑定为: E1B
  */
 #define ENCODER_LEFT_MEAS_INST            E1B_INST
 #define ENCODER_LEFT_MEAS_INST_INT_IRQN   E1B_INST_INT_IRQN
@@ -382,19 +383,14 @@ void encoder_clear_update_flag(void)
 }
 
 /**
- * @brief  左轮编码器中断服务函数
+ * @brief  左轮编码器中断服务函数 -> 现绑定为 E2A
  * @note   处理捕获沿计数和采样周期提交事件。
  */
-void E1B_INST_IRQHandler(void)
+void E2A_INST_IRQHandler(void)
 {
-    /* MSPM0 Capture 特性：
-     * - Up-Down 模式：CC0_UP/CC0_DN 会按计数方向分流；
-     * - 单向计数模式：所有捕获事件都统一进入 CC0_DN。
-     * 因此 CC0_DN 必须处理，CC0_UP 作为 Up-Down 兼容入口。
-     */
-    switch (DL_TimerA_getPendingInterrupt(ENCODER_LEFT_MEAS_INST)) {
-        case DL_TIMER_IIDX_CC0_DN:
+    switch (DL_TimerG_getPendingInterrupt(E2A_INST)) {
         case DL_TIMER_IIDX_CC0_UP:
+        case DL_TIMER_IIDX_CC0_DN:
             encoder_left_capture_on_edge();
             break;
 
@@ -408,15 +404,18 @@ void E1B_INST_IRQHandler(void)
 }
 
 /**
- * @brief  右轮编码器中断服务函数
+ * @brief  右轮编码器中断服务函数 -> 现绑定为 E1B
  * @note   处理捕获沿计数和采样周期提交事件。
  */
-void E2A_INST_IRQHandler(void)
+void E1B_INST_IRQHandler(void)
 {
-    /* 与左轮同理：单向计数下捕获统一落在 CC0_DN */
-    switch (DL_TimerG_getPendingInterrupt(ENCODER_RIGHT_MEAS_INST)) {
-        case DL_TIMER_IIDX_CC0_UP:
+    /* MSPM0 Capture 特性：
+     * - Up-Down 模式：CC0_UP/CC0_DN 会按计数方向分流；
+     * - 单向计数模式：所有捕获事件都统一进入 CC0_DN。
+     */
+    switch (DL_TimerA_getPendingInterrupt(E1B_INST)) {
         case DL_TIMER_IIDX_CC0_DN:
+        case DL_TIMER_IIDX_CC0_UP:
             encoder_right_capture_on_edge();
             break;
 

@@ -17,6 +17,21 @@
 static char s_speedLine[320];
 static char s_pidTimingLine[96];
 static char s_grayBitsLine[GW_GRAY_CHANNEL_COUNT + 1U];
+static char s_task1SpeedLine[64];
+
+void SerialReport_Task1Speed(void)
+{
+    int len;
+
+    len = snprintf(s_task1SpeedLine,
+                   sizeof(s_task1SpeedLine),
+                   "d: %f, %f\n",
+                   (double)encoder_get_left_speed_mps(),
+                   (double)encoder_get_right_speed_mps());
+    if (len > 0) {
+        (void)Serial0_SendStringTry(s_task1SpeedLine);
+    }
+}
 
 /**
  * @brief  执行一次状态上报

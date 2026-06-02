@@ -1,7 +1,6 @@
 /**
  * @file    main.h
- * @brief   主程序公共定义
- * @details 存放 main.c 使用的通用常量、外部变量声明。
+ * @brief   Public definitions for main.c.
  */
 #ifndef MAIN_H_
 #define MAIN_H_
@@ -12,32 +11,26 @@
 extern "C" {
 #endif
 
-#define PID_PENDING_COUNT_MAX  (100U)               /* pending计数上限, 防止ISR无限累加 */
-#define BUZZER_BEEP_MS         (100U)               /* 蜂鸣器单次鸣叫时长(ms) */
+#define PID_PENDING_COUNT_MAX  (100U)
 
-/* 通用巡线参数 */
-#define BASE_LINE_SPEED        (0.2f)               /* 巡线基础速度(m/s) */
-#define MAX_LINE_SPEED_DIFF    (0.80f)              /* 灰度外环差速上限(m/s) */
+#define BASE_LINE_SPEED        (0.2f)
+#define MAX_LINE_SPEED_DIFF    (0.80f)
+#define BASE_SPEED_TEST        (0.5f)
+#define PWM_TEST_DUTY          (30)
 
-/* 通用直线行驶参数 */
-#define BASE_STRAIGHT_SPEED    (0.4f)               /* 直线基础速度(m/s) */
-#define MAX_YAW_SPEED_DIFF     (1.0f)               /* Yaw外环差速上限(m/s) */
+#define BASE_STRAIGHT_SPEED    (0.4f)
+#define MAX_YAW_SPEED_DIFF     (1.0f)
 
-/* 通用转向参数 */
-#define TURN_DONE_ERR_DEG      (5.0f)               /* 转向完成判定死区(deg) */
-#define TURN_ANGLE_DEG         (90.0f)              /* 默认直角转弯角度(deg) */
+#define TURN_DONE_ERR_DEG      (5.0f)
+#define TURN_ANGLE_DEG         (90.0f)
 
-/* 原地旋转找线参数 */
-#define SPIN_TO_LINE_SPEED_MPS (0.25f)              /* 原地旋转找线速度(m/s) */
-#define SPIN_LINE_DELAY_MS     (500U)               /* 旋转后延迟检测灰度(ms), 防止误判当前线 */
+#define SPIN_TO_LINE_SPEED_MPS (0.25f)
+#define SPIN_LINE_DELAY_MS     (500U)
 
-/* IMU航向角反馈量, 由 main.c 中断更新 */
 extern volatile float g_currentYaw;
 
-/* ===== 共享状态变量(供菜单等模块访问) ===== */
-extern uint8_t  g_taskId;                /* 当前任务编号: 0=待机, 1=巡线, 2=航向直行, 3=电机测试 */
-extern float    target_straight_yaw;     /* 任务2航向直行目标航向角(deg) */
-extern volatile uint8_t g_buzzerRequestFlag; /* 蜂鸣器请求标志: 1=请求响一次 */
+extern uint8_t  g_taskId;
+extern float    target_straight_yaw;
 
 int main(void);
 void TIMER_FOR_1MS_INST_IRQHandler(void);
@@ -46,4 +39,4 @@ void TIMER_FOR_1MS_INST_IRQHandler(void);
 }
 #endif
 
-#endif
+#endif /* MAIN_H_ */

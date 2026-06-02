@@ -150,10 +150,6 @@ void PID_Init(void)
     PID_Right_Speed.IntegralMax = 6.0f;
     PID_Right_Speed.IntegralMin = -6.0f;
 
-    PID_SPEED_INIT(0.2f, 0.15f, 0.08f,
-                   0.2f, 0.15f, 0.08f);
-    PID_Grayscale_Init(0.25f, 0.0f, 5.0f);
-    PID_Yaw_Init(0.03f, 0.0f, 0.2f);
 
     PID_ResetAll();
     PID_ClearSpeedOverride();
@@ -289,9 +285,6 @@ void PID_ExecuteSpeedInnerLoop(void)
         g_pidRuntime.rightDutyCmd = (int16_t)(-pid_reverse_duty_from_speed(g_pidRuntime.targetRightSpeedMps));
     }
 
-    if ((g_leftDirectReverse != 0U) || (g_rightDirectReverse != 0U)) {
-        DCMotor_SetDuty(g_pidRuntime.leftDutyCmd, g_pidRuntime.rightDutyCmd);
-    }
 }
 
 /**

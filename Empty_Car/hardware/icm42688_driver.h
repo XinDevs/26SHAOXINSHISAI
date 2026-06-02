@@ -79,6 +79,15 @@ void Get_Gyro_ICM42688(void);
  * @brief  执行 IMU 零偏校准
  */
 void IMU_Calibrate(void);
+/**
+ * @brief  获取带零点偏移的Yaw角(度)
+ * @retval Yaw角(度), 范围 -180 ~ +180
+ */
+float ICM42688_GetYawZeroedDeg(void);
+/**
+ * @brief  将当前Yaw角设为零点
+ */
+void ICM42688_ResetYawZero(void);
 
 /* Bank 0 常用寄存器 */
 #define ICM42688_DEVICE_CONFIG             0x11

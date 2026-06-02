@@ -29,6 +29,7 @@ typedef struct {
  */
 uint8_t SerialReport_Process(volatile uint8_t *eventFlag,
                              const SerialReportSnapshot_t *snapshot);
+void SerialReport_Task1Speed(void);
 
 #ifdef __cplusplus
 }

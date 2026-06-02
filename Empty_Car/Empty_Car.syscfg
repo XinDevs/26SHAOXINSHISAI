@@ -21,6 +21,8 @@ const GPIO2    = GPIO.addInstance();
 const GPIO3    = GPIO.addInstance();
 const GPIO4    = GPIO.addInstance();
 const GPIO5    = GPIO.addInstance();
+const GPIO6    = GPIO.addInstance();
+const GPIO7    = GPIO.addInstance();
 const I2C      = scripting.addModule("/ti/driverlib/I2C", {}, false);
 const I2C1     = I2C.addInstance();
 const I2C2     = I2C.addInstance();
@@ -154,6 +156,14 @@ GPIO4.associatedPins[0].pin.$assign = "PA27";
 GPIO5.$name                         = "FLASH_CS";
 GPIO5.associatedPins[0].$name       = "PIN_1";
 GPIO5.associatedPins[0].pin.$assign = "PB6";
+
+GPIO6.$name                         = "LED_RED";
+GPIO6.associatedPins[0].$name       = "PIN_2";
+GPIO6.associatedPins[0].pin.$assign = "PB11";
+
+GPIO7.$name                         = "LED_GREEN";
+GPIO7.associatedPins[0].$name       = "PIN_3";
+GPIO7.associatedPins[0].pin.$assign = "PB14";
 
 I2C1.$name                             = "I2C_OLED";
 I2C1.advDigitalGlitchFilter            = "CLOCKS_1";

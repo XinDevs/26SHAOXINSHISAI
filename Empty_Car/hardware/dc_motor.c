@@ -74,17 +74,17 @@ static void DCMotor_SetLeftDirection(DCMotor_Direction_t dir)
     switch (realDir)
     {
         case DCMOTOR_DIR_FORWARD:
-            DL_GPIO_setPins(DC_Motor_AIN1_PORT, DC_Motor_AIN1_PIN);
-            DL_GPIO_clearPins(DC_Motor_AIN2_PORT, DC_Motor_AIN2_PIN);
+            DL_GPIO_setPins(DC_Motor_BIN1_PORT, DC_Motor_BIN1_PIN);
+            DL_GPIO_clearPins(DC_Motor_BIN2_PORT, DC_Motor_BIN2_PIN);
             break;
         case DCMOTOR_DIR_BACKWARD:
-            DL_GPIO_clearPins(DC_Motor_AIN1_PORT, DC_Motor_AIN1_PIN);
-            DL_GPIO_setPins(DC_Motor_AIN2_PORT, DC_Motor_AIN2_PIN);
+            DL_GPIO_clearPins(DC_Motor_BIN1_PORT, DC_Motor_BIN1_PIN);
+            DL_GPIO_setPins(DC_Motor_BIN2_PORT, DC_Motor_BIN2_PIN);
             break;
         case DCMOTOR_DIR_STOP:
         default:
-            DL_GPIO_clearPins(DC_Motor_AIN1_PORT, DC_Motor_AIN1_PIN);
-            DL_GPIO_clearPins(DC_Motor_AIN2_PORT, DC_Motor_AIN2_PIN);
+            DL_GPIO_clearPins(DC_Motor_BIN1_PORT, DC_Motor_BIN1_PIN);
+            DL_GPIO_clearPins(DC_Motor_BIN2_PORT, DC_Motor_BIN2_PIN);
             break;
     }
 }
@@ -100,17 +100,17 @@ static void DCMotor_SetRightDirection(DCMotor_Direction_t dir)
     switch (realDir)
     {
         case DCMOTOR_DIR_FORWARD:
-            DL_GPIO_setPins(DC_Motor_BIN1_PORT, DC_Motor_BIN1_PIN);
-            DL_GPIO_clearPins(DC_Motor_BIN2_PORT, DC_Motor_BIN2_PIN);
+            DL_GPIO_setPins(DC_Motor_AIN1_PORT, DC_Motor_AIN1_PIN);
+            DL_GPIO_clearPins(DC_Motor_AIN2_PORT, DC_Motor_AIN2_PIN);
             break;
         case DCMOTOR_DIR_BACKWARD:
-            DL_GPIO_clearPins(DC_Motor_BIN1_PORT, DC_Motor_BIN1_PIN);
-            DL_GPIO_setPins(DC_Motor_BIN2_PORT, DC_Motor_BIN2_PIN);
+            DL_GPIO_clearPins(DC_Motor_AIN1_PORT, DC_Motor_AIN1_PIN);
+            DL_GPIO_setPins(DC_Motor_AIN2_PORT, DC_Motor_AIN2_PIN);
             break;
         case DCMOTOR_DIR_STOP:
         default:
-            DL_GPIO_clearPins(DC_Motor_BIN1_PORT, DC_Motor_BIN1_PIN);
-            DL_GPIO_clearPins(DC_Motor_BIN2_PORT, DC_Motor_BIN2_PIN);
+            DL_GPIO_clearPins(DC_Motor_AIN1_PORT, DC_Motor_AIN1_PIN);
+            DL_GPIO_clearPins(DC_Motor_AIN2_PORT, DC_Motor_AIN2_PIN);
             break;
     }
 }
@@ -144,7 +144,7 @@ static void DCMotor_SetPwmAbs(DL_TIMER_CC_INDEX ccIndex, uint16_t dutyAbs)
  */
 static void DCMotor_SetLeftPwmAbs(uint16_t dutyAbs)
 {
-    DCMotor_SetPwmAbs(GPIO_DC_Motor_PWM_C0_IDX, dutyAbs);
+    DCMotor_SetPwmAbs(GPIO_DC_Motor_PWM_C1_IDX, dutyAbs);
 }
 
 /**
@@ -153,7 +153,7 @@ static void DCMotor_SetLeftPwmAbs(uint16_t dutyAbs)
  */
 static void DCMotor_SetRightPwmAbs(uint16_t dutyAbs)
 {
-    DCMotor_SetPwmAbs(GPIO_DC_Motor_PWM_C1_IDX, dutyAbs);
+    DCMotor_SetPwmAbs(GPIO_DC_Motor_PWM_C0_IDX, dutyAbs);
 }
 
 /**

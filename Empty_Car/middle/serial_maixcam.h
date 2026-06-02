@@ -43,6 +43,12 @@
 extern "C" {
 #endif
 
+#define SERIAL_MAIXCAM_RESULT_NONE          0x00U
+#define SERIAL_MAIXCAM_RESULT_RED_CIRCLE    0x01U
+#define SERIAL_MAIXCAM_RESULT_RED_SQUARE    0x02U
+#define SERIAL_MAIXCAM_RESULT_GREEN_CIRCLE  0x03U
+#define SERIAL_MAIXCAM_RESULT_GREEN_SQUARE  0x04U
+
 /**
  * @brief  鍒濆鍖?MaixCam 涓插彛锛圲ART2锛? */
 void SerialMaixCam_Init(void);
@@ -54,6 +60,8 @@ uint8_t SerialMaixCam_Process(void);
 /**
  * @brief  鑾峰彇鏈€杩戜竴娆¤В鏋愬埌鐨勫懡浠ゅ瓧绗︿覆锛堝幓鎺?@ 鍓嶇紑锛? * @return 鍛戒护瀛楃涓叉寚閽堬紝鎸囧悜妯″潡鍐呴儴闈欐€佺紦鍐诧紱鏃犲懡浠ゆ椂杩斿洖绌轰覆 ""銆? *         涓嬫 Process 璋冪敤鍚庡唴瀹逛細琚鐩栥€? */
 const char *SerialMaixCam_GetCommand(void);
+
+uint8_t SerialMaixCam_GetResultCode(void);
 
 /**
  * @brief  鍚?MaixCam 鍙戦€佸懡浠わ紙闈為樆濉烇級锛岃嚜鍔ㄦ嫾鎺?@ 鍓嶇紑涓?\r\n 鍚庣紑
