@@ -213,8 +213,13 @@ void CarTest_RenderOledChinese(void)
 {
     OLED_Clear();
     OLED_Printf(0, 0,  OLED_8X16, "一二三四五");
+    OLED_Printf(104, 0, OLED_6X8, "16");
     OLED_Printf(0, 16, OLED_8X16, "红绿圆方弃");
-    OLED_Printf(0, 32, OLED_8X16, "巡检用时秒");
+    OLED_Printf(104, 16, OLED_6X8, "16");
+    OLED_Printf(0, 32, OLED_12X12, "一二三四五");
+    OLED_Printf(104, 32, OLED_6X8, "12");
+    OLED_Printf(0, 44, OLED_12X12, "红绿圆方弃");
+    OLED_Printf(104, 44, OLED_6X8, "12");
     OLED_Printf(0, 56, OLED_6X8, "K4:Back");
     OLED_Update();
 }

@@ -7,6 +7,7 @@
 #include "car_turn.h"
 #include "pid.h"
 #include "grayscale_sensor.h"
+#include "main.h"
 
 /** @brief 转弯是否激活 (0:未激活, 1:激活) */
 static uint8_t s_turnActive = 0U;
@@ -47,16 +48,16 @@ uint8_t Turn_IsRunning(void)
  */
 void Turn_Start(uint8_t turnLeft, float speedMps, uint32_t nowMs)
 {
+    float innerSpeedMps = speedMps * TURN_INNER_SPEED_RATIO;
+
     s_turnActive = 1U;
     s_turnStartMs = nowMs;
     s_turnLeft = (turnLeft != 0U) ? 1U : 0U;
 
     if (turnLeft != 0U) {
-        PID_GoalSpeedLeft_InitEx(0.0f, 1U);       /* 左轮停止 */
-        PID_GoalSpeedRight_InitEx(speedMps, 1U);  /* 右轮正转 */
+        PID_GoalSpeedPair_Set(innerSpeedMps, speedMps);
     } else {
-        PID_GoalSpeedLeft_InitEx(speedMps, 1U);   /* 左轮正转 */
-        PID_GoalSpeedRight_InitEx(0.0f, 1U);      /* 右轮停止 */
+        PID_GoalSpeedPair_Set(speedMps, innerSpeedMps);
     }
 }
 

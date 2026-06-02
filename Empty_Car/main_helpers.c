@@ -20,13 +20,16 @@ static uint8_t LineLatch = 0U;
  */
 uint8_t RandomDirection(void)
 {
+    uint32_t mixed;
+
     /* Xorshift32 伪随机数生成 */
     s_turnRandomSeed ^= (SysMs + 0x9E3779B9U);
     s_turnRandomSeed ^= (s_turnRandomSeed << 13);
     s_turnRandomSeed ^= (s_turnRandomSeed >> 17);
     s_turnRandomSeed ^= (s_turnRandomSeed << 5);
 
-    return ((s_turnRandomSeed & 1U) != 0U) ? 1U : 0U;
+    mixed = s_turnRandomSeed ^ (s_turnRandomSeed >> 16) ^ (SysMs >> 3);
+    return ((mixed & 1U) != 0U) ? 1U : 0U;
 }
 
 /**

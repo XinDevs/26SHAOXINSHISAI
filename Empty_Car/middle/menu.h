@@ -101,12 +101,12 @@ void Menu_SetPIDEditPage(PIDEditPage_t page);
 /**
  * @brief  停止任务（滑行停止）并返回菜单
  */
-void Main_StopTaskAndReturnMenu(void);
+void Task_GiveUp(void);
 
 /**
  * @brief  停止任务（主动刹车）并返回菜单
  */
-void Main_BrakeTaskAndReturnMenu(void);
+void Task_Finish(void);
 
 #ifdef __cplusplus
 }

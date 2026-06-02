@@ -1,6 +1,8 @@
 /**
  * @file    menu.c
-  *
+ * @brief   OLED 树状菜单系统实现
+ * @details 基于 4 个按键的层级菜单导航，支持节点菜单和叶子动作。
+ *          K1=上移，K3=下移，K2=确认，K4=返回。
  */
 #include "menu.h"
 #include "main.h"
@@ -20,17 +22,17 @@
 #include "ti_msp_dl_config.h"
 #include <string.h>
 
-/*
-  *
-  *
- *  [1]  Line Left       (LEAF)
+/* ===== 菜单树定义 =====
+ * 索引布局:
+ *  [0]  Tasks           (NODE, 5 项)
+ *  [1]  Line Auto       (LEAF)
  *  [2]  Line Random     (LEAF)
  *  [3]  Gray Line       (LEAF)
  *  [4]  Junction        (LEAF)
  *  [5]  Reserved 5      (LEAF)
-  *
+ *  [6]  Patrol Info     (LEAF)
  *  [7]  Status          (LEAF)
-  *
+ *  [8]  Tests           (NODE, 7 项)
  *  [9]  Speed Loop Test (LEAF)
  *  [10] PWM Test        (LEAF)
  *  [11] Camera Test     (LEAF)
@@ -38,36 +40,36 @@
  *  [13] Flash Test      (LEAF)
  *  [14] OLED CN Test    (LEAF)
  *  [15] Buzzer LED Test (LEAF)
-  *
-  *
+ *  [16] Settings        (NODE, 1 项)
+ *  [17] PID Tune        (NODE, 4 项)
  *  [18] Left Wheel PID  (LEAF)
  *  [19] Right Wheel PID (LEAF)
  *  [20] Gray PID        (LEAF)
  *  [21] Yaw PID         (LEAF)
  */
 
-#define MENU_STACK_MAX   4
-#define MENU_VISIBLE_ROWS 6
+#define MENU_STACK_MAX   4    /* 菜单栈最大深度 */
+#define MENU_VISIBLE_ROWS 6   /* OLED 可见行数 */
 
-/* */
-static SystemMode_t  s_mode         = SYS_MENU;
-static uint8_t       s_stack[MENU_STACK_MAX];
-static uint8_t       s_depth        = 0U;
-static uint8_t       s_cursor       = 0U;
-static uint8_t       s_scroll       = 0U;
-static uint8_t       s_currentParent = 0U;
+/* ===== 菜单导航状态 ===== */
+static SystemMode_t  s_mode         = SYS_MENU;  /* 当前系统模式 */
+static uint8_t       s_stack[MENU_STACK_MAX];     /* 菜单栈 */
+static uint8_t       s_depth        = 0U;         /* 当前深度 */
+static uint8_t       s_cursor       = 0U;         /* 光标位置 */
+static uint8_t       s_scroll       = 0U;         /* 滚动偏移 */
+static uint8_t       s_currentParent = 0U;        /* 当前父菜单索引 */
 
-/* */
-static PIDEditPage_t s_pidEditPage  = PID_EDIT_LEFT;
-static uint8_t       s_pidParamIdx  = 0U;
-static float         s_pidEditKp    = 0.0f;
-static float         s_pidEditKi    = 0.0f;
-static float         s_pidEditKd    = 0.0f;
-static uint8_t       s_pidDirty     = 0U;
+/* ===== PID 编辑状态 ===== */
+static PIDEditPage_t s_pidEditPage  = PID_EDIT_LEFT;  /* 当前编辑页面 */
+static uint8_t       s_pidParamIdx  = 0U;   /* 当前参数索引: 0=Kp, 1=Ki, 2=Kd */
+static float         s_pidEditKp    = 0.0f;  /* 编辑中的 Kp */
+static float         s_pidEditKi    = 0.0f;  /* 编辑中的 Ki */
+static float         s_pidEditKd    = 0.0f;  /* 编辑中的 Kd */
+static uint8_t       s_pidDirty     = 0U;    /* 参数是否被修改 */
 
-static CarTestState_t s_testState = {0};
+static CarTestState_t s_testState = {0};  /* 测试状态 */
 
-/* Action functions */
+/* ===== 启动任务 ===== */
 static void Menu_StartTask(uint8_t taskId)
 {
     TaskId = taskId;
@@ -77,6 +79,7 @@ static void Menu_StartTask(uint8_t taskId)
     Menu_SetMode(SYS_TASK_RUN);
 }
 
+/* ===== 菜单动作回调 ===== */
 static void actionGrayLine(void) { Menu_StartTask(3U); }
 static void actionYawStraight(void) { TargetYaw = CurrentYaw; Menu_StartTask(4U); }
 static void actionLineLeft(void) { Menu_StartTask(1U); }
@@ -95,58 +98,60 @@ static void actionPIDEditRight(void) { Menu_SetPIDEditPage(PID_EDIT_RIGHT); s_pi
 static void actionPIDEditGray(void) { Menu_SetPIDEditPage(PID_EDIT_GRAY); s_pidParamIdx = 0U; s_pidDirty = 0U; Menu_SetMode(SYS_PID_EDIT); }
 static void actionPIDEditYaw(void) { Menu_SetPIDEditPage(PID_EDIT_YAW); s_pidParamIdx = 0U; s_pidDirty = 0U; Menu_SetMode(SYS_PID_EDIT); }
 
+/* ===== 菜单项数组 ===== */
 static const MenuItem_t menuItems[] = {
-    /* */
+    /* [0] 任务 */
     { "Tasks",           MENU_NODE,  NULL,               1, 5 },
-    /* */
+    /* [1] 循迹后自动转向 */
     { "Line Auto",       MENU_LEAF,  actionLineLeft,     0, 0 },
-    /* */
+    /* [2] 循迹后随机转向 */
     { "Line Random",     MENU_LEAF,  actionLineRandom,   0, 0 },
-    /* */
+    /* [3] 灰度循迹 */
     { "Gray Line",       MENU_LEAF,  actionGrayLine,     0, 0 },
-    /* */
+    /* [4] 路口判断 */
     { "Junction",        MENU_LEAF,  actionYawStraight,  0, 0 },
     /* [5] Reserved task 5 */
     { "Reserved 5",      MENU_LEAF,  NULL,               0, 0 },
-    /* */
+    /* [6] 巡检信息 */
     { "Patrol Info",     MENU_LEAF,  actionPatrolInfo,   0, 0 },
-    /* */
+    /* [7] 状态监测 */
     { "Status",          MENU_LEAF,  actionMonitor,      0, 0 },
-    /* [8] Tests */
+    /* [8] 测试 */
     { "Tests",           MENU_NODE,  NULL,               9, 7 },
-    /* */
+    /* [9] 速度环测试 */
     { "Speed Loop Test", MENU_LEAF,  actionSpeedLoopTest, 0, 0 },
-    /* [10] PWM test */
+    /* [10] PWM 测试 */
     { "PWM Test",        MENU_LEAF,  actionPwmTest,      0, 0 },
-    /* [11] Camera Test */
+    /* [11] 摄像头测试 */
     { "Camera Test",     MENU_LEAF,  actionCameraTest,   0, 0 },
-    /* [12] Gray Test */
+    /* [12] 灰度测试 */
     { "Gray Test",       MENU_LEAF,  actionGrayTest,     0, 0 },
-    /* [13] Flash Test */
+    /* [13] Flash 测试 */
     { "Flash Test",      MENU_LEAF,  actionFlashTest,    0, 0 },
-    /* [14] OLED CN Test */
+    /* [14] OLED 中文测试 */
     { "OLED CN Test",    MENU_LEAF,  actionOledCnTest,   0, 0 },
-    /* */
+    /* [15] 蜂鸣器 LED 测试 */
     { "Buzzer LED Test", MENU_LEAF,  actionBuzzerLedTest, 0, 0 },
-    /* */
+    /* [16] 设置 */
     { "Settings",        MENU_NODE,  NULL,               17, 1 },
-    /* */
+    /* [17] PID 调节 */
     { "PID Tune",        MENU_NODE,  NULL,               18, 4 },
-    /* */
+    /* [18] 左轮 PID */
     { "Left Wheel PID",  MENU_LEAF,  actionPIDEditLeft,  0, 0 },
-    /* */
+    /* [19] 右轮 PID */
     { "Right Wheel PID", MENU_LEAF,  actionPIDEditRight, 0, 0 },
-    /* */
+    /* [20] 灰度 PID */
     { "Gray PID",        MENU_LEAF,  actionPIDEditGray,  0, 0 },
-    /* [21] Yaw PID */
+    /* [21] 航向 PID */
     { "Yaw PID",         MENU_LEAF,  actionPIDEditYaw,   0, 0 },
 };
 
 #define MENU_ITEM_COUNT  (sizeof(menuItems) / sizeof(menuItems[0]))
 
+/* 主菜单顶层项索引: Tasks, Patrol Info, Tests, Status, Settings */
 static const uint8_t s_topLevelItems[] = { 0U, 6U, 8U, 7U, 16U };
 
-/* */
+/* ===== 内部辅助函数 ===== */
 
 static uint8_t Menu_GetStart(void)
 {
@@ -190,7 +195,7 @@ static void Menu_AdjustScroll(void)
     }
 }
 
-/* */
+/* ===== 公共接口 ===== */
 
 void Menu_Init(void)
 {
@@ -230,6 +235,8 @@ void Menu_ExitToMenu(void)
     s_currentParent = 0U;
 }
 
+/* ===== 按键处理 ===== */
+
 void Menu_ProcessKey(uint8_t key)
 {
     uint8_t count;
@@ -240,7 +247,7 @@ void Menu_ProcessKey(uint8_t key)
         return;
     }
 
-    /* */
+    /* PID 编辑模式 */
     if (s_mode == SYS_PID_EDIT) {
         switch (key) {
             case 1: /* K1: - */
@@ -277,12 +284,13 @@ void Menu_ProcessKey(uint8_t key)
         return;
     }
 
-    /* */
+    /* 巡检信息页面：任意键返回 */
     if (s_mode == SYS_PATROL_INFO) {
         s_mode = SYS_MENU;
         return;
     }
 
+    /* 状态监测：K4 返回 */
     if (s_mode == SYS_MONITOR) {
         if (key == 4U) {
             s_mode = SYS_MENU;
@@ -290,6 +298,7 @@ void Menu_ProcessKey(uint8_t key)
         return;
     }
 
+    /* Flash 测试：K4 返回 */
     if (s_mode == SYS_FLASH_TEST) {
         if (key == 4U) {
             s_mode = SYS_MENU;
@@ -297,6 +306,7 @@ void Menu_ProcessKey(uint8_t key)
         return;
     }
 
+    /* 灰度测试：K4 返回 */
     if (s_mode == SYS_GRAY_TEST) {
         if (key == 4U) {
             s_mode = SYS_MENU;
@@ -304,6 +314,7 @@ void Menu_ProcessKey(uint8_t key)
         return;
     }
 
+    /* 速度环/PWM 测试：K4 返回 */
     if ((s_mode == SYS_SPEED_LOOP_TEST) || (s_mode == SYS_PWM_TEST)) {
         if (key == 4U) {
             DCMotor_SetDuty(0, 0);
@@ -313,6 +324,7 @@ void Menu_ProcessKey(uint8_t key)
         return;
     }
 
+    /* 摄像头测试：K2 查看，K4 返回 */
     if (s_mode == SYS_CAMERA_TEST) {
         if (key == 2U) {
             CarTest_CameraLook();
@@ -323,6 +335,7 @@ void Menu_ProcessKey(uint8_t key)
         return;
     }
 
+    /* OLED 中文测试：K4 返回 */
     if (s_mode == SYS_OLED_CN_TEST) {
         if (key == 4U) {
             s_mode = SYS_MENU;
@@ -330,6 +343,7 @@ void Menu_ProcessKey(uint8_t key)
         return;
     }
 
+    /* 蜂鸣器 LED 测试 */
     if (s_mode == SYS_BUZZER_LED_TEST) {
         switch (key) {
             case 1U:
@@ -351,7 +365,7 @@ void Menu_ProcessKey(uint8_t key)
         return;
     }
 
-    /* */
+    /* 任务运行模式：K4 放弃任务 */
     if (s_mode == SYS_TASK_RUN) {
         if (key == 4U) {
             DCMotor_SetDuty(0, 0);
@@ -365,7 +379,7 @@ void Menu_ProcessKey(uint8_t key)
         return;
     }
 
-    /* */
+    /* 菜单导航模式 */
     count = Menu_GetCount();
 
     switch (key) {
@@ -423,7 +437,8 @@ void Menu_ProcessKey(uint8_t key)
     Menu_AdjustScroll();
 }
 
-/* */
+/* ===== 菜单渲染 ===== */
+
 static void Menu_RenderMenu(void)
 {
     uint8_t count = Menu_GetCount();
@@ -434,15 +449,17 @@ static void Menu_RenderMenu(void)
 
     OLED_Clear();
 
+    /* 标题 */
     if (s_depth == 0U) {
         title = "Main";
-        titleX = 40U;
+        titleX = 40U;  /* 居中显示 */
     } else {
         title = menuItems[s_currentParent].name;
         titleX = 0U;
     }
     OLED_Printf(titleX, 0, OLED_8X16, "%s", title);
 
+    /* 菜单项列表 */
     for (i = 0U; i < MENU_VISIBLE_ROWS; i++) {
         uint8_t itemPos = (uint8_t)(s_scroll + i);
         if (itemPos >= count) break;
@@ -456,11 +473,13 @@ static void Menu_RenderMenu(void)
             OLED_Printf(0, y, OLED_6X8, " %s", menuItems[idx].name);
         }
 
+        /* 反显选中项 */
         if (itemPos == s_cursor) {
             OLED_ReverseArea(0, y, 128U, 8U);
         }
     }
 
+    /* 滚动条 */
     if (count > MENU_VISIBLE_ROWS) {
         uint8_t barH = (uint8_t)((MENU_VISIBLE_ROWS * 8U) / count);
         uint8_t barY = (uint8_t)(16U + (uint8_t)((s_scroll * 8U * MENU_VISIBLE_ROWS) / count));
@@ -471,7 +490,8 @@ static void Menu_RenderMenu(void)
     OLED_Update();
 }
 
-/* */
+/* ===== 状态监测渲染 ===== */
+
 static void Menu_RenderMonitor(void)
 {
     float grayDiff, yawDiff;
@@ -508,10 +528,12 @@ static void Menu_RenderMonitor(void)
     OLED_Update();
 }
 
+/* ===== 巡检信息渲染 ===== */
+
 static const char *Menu_PatrolOrderText(uint8_t index)
 {
     static const char *orders[PATROL_INFO_MAX_RESULTS] = {
-        "1", "2", "3", "4", "5", "6"
+        "一", "二", "三", "四", "五", "六"
     };
 
     return (index < PATROL_INFO_MAX_RESULTS) ? orders[index] : "";
@@ -521,13 +543,13 @@ static const char *Menu_PatrolResultText(uint8_t resultCode)
 {
     switch (resultCode) {
         case SERIAL_MAIXCAM_RESULT_RED_CIRCLE:
-            return "RedO";
+            return "红圆";
         case SERIAL_MAIXCAM_RESULT_RED_SQUARE:
-            return "RedS";
+            return "红方";
         case SERIAL_MAIXCAM_RESULT_GREEN_CIRCLE:
-            return "GrnO";
+            return "绿圆";
         case SERIAL_MAIXCAM_RESULT_GREEN_SQUARE:
-            return "GrnS";
+            return "绿方";
         default:
             return "None";
     }
@@ -549,14 +571,14 @@ static void Menu_RenderPatrolInfo(void)
     OLED_Clear();
 
     if (info.storageValid == 0U) {
-        OLED_ShowString(40, 0, "Patrol", OLED_12X12);
-        OLED_ShowString(46, 24, "NoRec", OLED_12X12);
+        OLED_ShowString(28, 0, "巡检", OLED_12X12);
+        OLED_ShowString(28, 24, "None", OLED_12X12);
         OLED_Printf(0, 56, OLED_6X8, "K4:Back");
         OLED_Update();
         return;
     }
 
-    OLED_ShowString(0, 0, "Time", OLED_12X12);
+    OLED_ShowString(0, 0, "巡检用时", OLED_12X12);
     OLED_Printf(54, 2, OLED_6X8, "%lus", (unsigned long)info.elapsedSeconds);
 
     for (line = 0U; line < 3U; line++) {
@@ -582,7 +604,8 @@ static void Menu_RenderPatrolInfo(void)
     OLED_Update();
 }
 
-/* */
+/* ===== 测试页面渲染 ===== */
+
 static void Menu_RenderFlashTest(void)
 {
     CarTest_RenderFlash(&s_testState);
@@ -617,6 +640,8 @@ static void Menu_RenderBuzzerLedTest(void)
 {
     CarTest_RenderBuzzerLed();
 }
+
+/* ===== PID 编辑页面渲染 ===== */
 
 static void Menu_RenderPIDEdit(void)
 {
@@ -670,7 +695,8 @@ static void Menu_RenderPIDEdit(void)
     OLED_Update();
 }
 
-/* */
+/* ===== 统一渲染入口 ===== */
+
 void Menu_Render(void)
 {
     switch (s_mode) {
@@ -712,9 +738,12 @@ void Menu_Render(void)
     }
 }
 
-/* */
+/* ===== 任务停止/完成 ===== */
 
-void Main_StopTaskAndReturnMenu(void)
+/**
+ * @brief  放弃任务（滑行停止，不保存巡检）
+ */
+void Task_GiveUp(void)
 {
     DCMotor_SetDuty(0, 0);
     PID_ResetAll();
@@ -727,7 +756,10 @@ void Main_StopTaskAndReturnMenu(void)
     OledFlag = 1U;
 }
 
-void Main_BrakeTaskAndReturnMenu(void)
+/**
+ * @brief  完成任务（刹车停止，保存巡检）
+ */
+void Task_Finish(void)
 {
     DCMotor_Brake();
     PID_ResetAll();
@@ -736,7 +768,6 @@ void Main_BrakeTaskAndReturnMenu(void)
     (void)SerialMaixCam_SendStopRequest();
     TaskId = 0U;
     Turn_Reset();
-    Menu_SetMode(SYS_MENU);
+    Menu_SetMode(SYS_PATROL_INFO);
     OledFlag = 1U;
 }
-

@@ -102,12 +102,12 @@ int main(void)
     /* ===== ICM42688 初始化 ===== */
     ImuId = Init_ICM42688();
     OLEDUI_InitStatus(ImuId);
-    IMU_Calibrate();
-    Mahony_Init(100.0f);
-    Get_Acc_ICM42688();
-    Get_Gyro_ICM42688();
-    MahonyAHRSinit(icm42688_acc_x, icm42688_acc_y, icm42688_acc_z, 0.0f, 0.0f, 0.0f);
-    ICM42688_ResetYawZero();
+    // IMU_Calibrate();
+    // Mahony_Init(100.0f);
+    // Get_Acc_ICM42688();
+    // Get_Gyro_ICM42688();
+    // MahonyAHRSinit(icm42688_acc_x, icm42688_acc_y, icm42688_acc_z, 0.0f, 0.0f, 0.0f);
+    // ICM42688_ResetYawZero();
 
     NVIC_ClearPendingIRQ(TIMER_FOR_1MS_INST_INT_IRQN);
     NVIC_EnableIRQ(TIMER_FOR_1MS_INST_INT_IRQN);
@@ -185,19 +185,25 @@ int main(void)
                                 /*
                                  * 摄像头等待状态：
                                  * - 收到结果后按 CameraDirection() 转成左右转命令；
-                                 * - 超时仍无结果时默认左转，防止一直停在路口。
+                                 * - 超时仍无结果时随机选择方向，防止一直停在路口。
                                  */
                                 if (CameraReady != 0U) {
-                                    /* MaixCam 返回有效结果，按识别结果开始转弯。 */
-                                    TurnLeft = CameraDirection(CameraCode);
+                                    /* MaixCam 返回有效结果按识别结果转向；未识别到标识则随机转向。 */
+                                    if (CameraCode == SERIAL_MAIXCAM_RESULT_NONE) {
+                                        TurnLeft = RandomDirection();
+                                    } else {
+                                        TurnLeft = CameraDirection(CameraCode);
+                                    }
                                     CameraReady = 0U;
                                     PID_ResetAll();
                                     Turn_Start(TurnLeft, SPIN_TO_LINE_SPEED_MPS, SysMs);
                                     TaskState = TASK_TURN;
-                                } else if ((uint32_t)(SysMs - CameraStartMs) >= CAMERA_TURN_TIMEOUT_MS) {
-                                    /* 摄像头超时：使用默认左转策略继续任务。 */
+                                } 
+                                else if ((uint32_t)(SysMs - CameraStartMs) >= CAMERA_TURN_TIMEOUT_MS) {
+                                    /* 摄像头超时：随机选择方向继续任务。 */
+                                    TurnLeft = RandomDirection();
                                     PID_ResetAll();
-                                    Turn_Start(1U, SPIN_TO_LINE_SPEED_MPS, SysMs);
+                                    Turn_Start(TurnLeft, SPIN_TO_LINE_SPEED_MPS, SysMs);
                                     TaskState = TASK_TURN;
                                 }
                                 break;
@@ -229,7 +235,7 @@ int main(void)
                                 /* 终点状态：复位横线计数，主动刹车，记录完成信息并返回菜单。 */
                                 TaskState = TASK_TRACE;
                                 Main_ResetStartFinishLineState();
-                                Main_BrakeTaskAndReturnMenu();
+                                Task_Finish();
                                 break;
 
                             default:
@@ -248,13 +254,15 @@ int main(void)
                                 LineState = Main_CheckStartFinishLineCrossing();
                                 if (LineState >= 2U) {
                                     TaskState = TASK_FINISH;
-                                } else if ((LineState == 0U) &&
+                                } 
+                                else if ((LineState == 0U) &&
                                            (PID_Gray_IsYJunction() != 0U)) {
                                     TurnLeft = RandomDirection();
                                     PID_ResetAll();
                                     Turn_Start(TurnLeft, SPIN_TO_LINE_SPEED_MPS, SysMs);
                                     TaskState = TASK_TURN;
-                                } else {
+                                } 
+                                else {
                                     PID_ExecuteGrayCascade(BASE_LINE_SPEED,
                                                            0.0f,
                                                            LINE_SPEED_DIFF_SCALE);
@@ -283,7 +291,7 @@ int main(void)
                                 /* 终点主动刹车并返回菜单。 */
                                 TaskState = TASK_TRACE;
                                 Main_ResetStartFinishLineState();
-                                Main_BrakeTaskAndReturnMenu();
+                                Task_Finish();
                                 break;
 
                             default:
@@ -305,7 +313,7 @@ int main(void)
                     case 4U:
                         /* 灰度循迹，遇到 Y 型岔路口停车。 */
                         if (PID_Gray_IsYJunction() != 0U) {
-                            Main_StopTaskAndReturnMenu();
+                            Task_GiveUp();
                         } else {
                             PID_ExecuteGrayCascade(BASE_LINE_SPEED,
                                                    0.0f,

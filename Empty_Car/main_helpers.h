@@ -12,8 +12,7 @@
 extern "C" {
 #endif
 
-/* 摄像头判向等待超时时间(ms)，超时后默认左转 */
-#define CAMERA_TURN_TIMEOUT_MS (1000U)
+
 
 /**
  * @brief  随机决定左转还是右转
