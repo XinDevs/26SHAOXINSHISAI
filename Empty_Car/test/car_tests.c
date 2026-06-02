@@ -5,6 +5,24 @@
 #include "grayscale_sensor.h"
 #include "serial_maixcam.h"
 
+static const char *s_cameraLastCmdName = "";
+static uint8_t s_cameraLastTxPayload = 0U;
+static uint8_t s_cameraLastTxOk = 0U;
+
+static void CarTest_CameraSendRequest(uint8_t payload, const char *cmdName)
+{
+    s_cameraLastCmdName = cmdName;
+    s_cameraLastTxPayload = payload;
+
+    if (payload == SERIAL_MAIXCAM_CMD_START_REQUEST) {
+        s_cameraLastTxOk = SerialMaixCam_SendStartRequest();
+    } else if (payload == SERIAL_MAIXCAM_CMD_STOP_REQUEST) {
+        s_cameraLastTxOk = SerialMaixCam_SendStopRequest();
+    } else {
+        s_cameraLastTxOk = 0U;
+    }
+}
+
 void CarTest_FlashRun(CarTestState_t *state)
 {
     OLED_Clear();
@@ -57,30 +75,31 @@ void CarTest_RenderGray(CarTestState_t *state)
 
     OLED_Clear();
     OLED_Printf(0, 0, OLED_8X16, "Gray Test");
-    OLED_Printf(0, 16, OLED_6X8, "L:%02X R:%02X S:%u",
+    OLED_Printf(0, 16, OLED_6X8, "4C:%02X(%u) 4D:%02X(%u)",
                 (unsigned int)state->grayLeftRaw,
+                (unsigned int)leftOk,
                 (unsigned int)state->grayRightRaw,
-                (unsigned int)state->grayStatus);
-    OLED_Printf(0, 24, OLED_6X8, "1-8      9-16");
+                (unsigned int)rightOk);
+    OLED_Printf(0, 24, OLED_6X8, "4C:0-7  4D:8-15");
     OLED_Printf(0, 32, OLED_6X8, "%s", bitsLine);
-    OLED_Printf(0, 48, OLED_6X8, "1=Black 0=White");
+    OLED_Printf(0, 48, OLED_6X8, "0=OK 3=I2C ERR");
     OLED_Printf(0, 56, OLED_6X8, "K4:Back");
     OLED_Update();
 }
 
 void CarTest_CameraEnter(void)
 {
-    (void)SerialMaixCam_SendCommand("start communication");
+    CarTest_CameraSendRequest(SERIAL_MAIXCAM_CMD_START_REQUEST, "start");
 }
 
 void CarTest_CameraLook(void)
 {
-    (void)SerialMaixCam_SendCommand("need look");
+    CarTest_CameraSendRequest(SERIAL_MAIXCAM_CMD_START_REQUEST, "start");
 }
 
 void CarTest_CameraExit(void)
 {
-    (void)SerialMaixCam_SendCommand("exit");
+    CarTest_CameraSendRequest(SERIAL_MAIXCAM_CMD_STOP_REQUEST, "stop");
 }
 
 void CarTest_RenderCamera(void)
@@ -120,10 +139,14 @@ void CarTest_RenderCamera(void)
     OLED_Clear();
     OLED_Printf(0, 0, OLED_8X16, "Camera Test");
     OLED_Printf(0, 16, OLED_8X16, "%s", resultText);
-    OLED_Printf(0, 32, OLED_6X8, "Code:0x%02X", (unsigned int)resultCode);
-    OLED_Printf(0, 40, OLED_6X8, "Drop:%lu",
+    OLED_Printf(0, 32, OLED_6X8, "RX:FF 01 %02X FE", (unsigned int)resultCode);
+    OLED_Printf(0, 40, OLED_6X8, "TX:%u FF01%02XFE",
+                (unsigned int)s_cameraLastTxOk,
+                (unsigned int)s_cameraLastTxPayload);
+    OLED_Printf(0, 48, OLED_6X8, "Cmd:%s", s_cameraLastCmdName);
+    OLED_Printf(84, 48, OLED_6X8, "D:%lu",
                 (unsigned long)SerialMaixCam_GetTxDropCount());
-    OLED_Printf(0, 56, OLED_6X8, "K2:Look K4:Back");
+    OLED_Printf(0, 56, OLED_6X8, "K2:Start K4:Stop");
     OLED_Update();
 }
 

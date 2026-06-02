@@ -45,7 +45,7 @@ extern "C" {
 #define GW_GRAY_CHANNEL_COUNT         16U
 #define GW_GRAY_MODULE_CHANNEL_COUNT  8U
 
-extern uint8_t sensor[GW_GRAY_CHANNEL_COUNT];  /* sensor[0]=1号(最左), sensor[15]=16号(最右) */
+extern uint8_t sensor[GW_GRAY_CHANNEL_COUNT];  /* sensor[0]=0号(最左), sensor[15]=15号(最右) */
 
 /* ================== 用户 API 声明 ================== */
 /**

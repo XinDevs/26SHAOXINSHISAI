@@ -33,6 +33,7 @@ extern uint8_t  g_taskId;
 extern float    target_straight_yaw;
 
 int main(void);
+uint32_t Main_GetSysTickMs(void);
 void TIMER_FOR_1MS_INST_IRQHandler(void);
 
 #ifdef __cplusplus

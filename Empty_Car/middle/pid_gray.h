@@ -22,6 +22,12 @@ void PID_UpdateYawFeedback(float yawDeg);
  */
 float PID_GetGrayscaleWeightedPosition(void);
 /**
+ * @brief  检测Y型岔路口
+ * @retval 1: 检测到稳定的Y型岔路口, 0: 未检测到
+ * @note   带防抖：连续3次检测确认，连续5次未检测取消
+ */
+uint8_t PID_Gray_IsYJunction(void);
+/**
  * @brief  灰度环单步计算
  */
 float PID_Calculate_GrayscaleStep(float targetPosition);

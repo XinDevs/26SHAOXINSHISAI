@@ -35,6 +35,7 @@ typedef struct {
 typedef enum {
     SYS_MENU = 0,      /* 菜单导航模式 */
     SYS_TASK_RUN,      /* 任务运行模式 */
+    SYS_PATROL_INFO,   /* 巡检信息页面 */
     SYS_MONITOR,       /* 实时监测模式 */
     SYS_PID_EDIT,      /* PID 调参模式 */
     SYS_FLASH_TEST,    /* Flash 测试页面 */

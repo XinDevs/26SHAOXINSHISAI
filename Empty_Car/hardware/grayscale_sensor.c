@@ -10,7 +10,7 @@
 
 #define GW_GRAY_I2C_TIMEOUT_CNT    (200000U)
 
-uint8_t sensor[GW_GRAY_CHANNEL_COUNT] = {0};  /* sensor[0]=1号(最左), sensor[15]=16号(最右) */
+uint8_t sensor[GW_GRAY_CHANNEL_COUNT] = {0};  /* sensor[0]=0号(最左), sensor[15]=15号(最右) */
 
 /* ============== 内部私有底层 I2C 实现 ===================*/
 

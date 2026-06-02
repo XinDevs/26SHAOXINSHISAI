@@ -13,6 +13,8 @@
 #include "buzzer_led.h"
 #include "Flash.h"
 #include "oled_ui.h"
+#include "patrol_info.h"
+#include "serial_maixcam.h"
 #include "test/car_tests.h"
 #include "ti_msp_dl_config.h"
 #include <string.h>
@@ -25,19 +27,20 @@
  *  [3]  Yaw Straight    (LEAF)
  *  [4]  PWM Test        (LEAF)
  *  [5]  Reserved        (LEAF)
- *  [6]  Status          (LEAF)
- *  [7]  Tests           (NODE, 5 项)
- *  [8]  Camera Test     (LEAF)
- *  [9]  Gray Test       (LEAF)
- *  [10] Flash Test      (LEAF)
- *  [11] OLED CN Test    (LEAF)
- *  [12] Buzzer LED Test (LEAF)
- *  [13] Settings        (NODE, 1 项)
- *  [14] PID Tune        (NODE, 4 项)
- *  [15] Left Wheel PID  (LEAF)
- *  [16] Right Wheel PID (LEAF)
- *  [17] Gray PID        (LEAF)
- *  [18] Yaw PID         (LEAF)
+ *  [6]  巡检信息       (LEAF)
+ *  [7]  Status          (LEAF)
+ *  [8]  Tests           (NODE, 5 项)
+ *  [9]  Camera Test     (LEAF)
+ *  [10] Gray Test       (LEAF)
+ *  [11] Flash Test      (LEAF)
+ *  [12] OLED CN Test    (LEAF)
+ *  [13] Buzzer LED Test (LEAF)
+ *  [14] Settings        (NODE, 1 项)
+ *  [15] PID Tune        (NODE, 4 项)
+ *  [16] Left Wheel PID  (LEAF)
+ *  [17] Right Wheel PID (LEAF)
+ *  [18] Gray PID        (LEAF)
+ *  [19] Yaw PID         (LEAF)
  */
 
 #define MENU_STACK_MAX   4
@@ -62,10 +65,19 @@ static uint8_t       s_pidDirty     = 0U;
 static CarTestState_t s_testState = {0};
 
 /* Action functions */
-static void actionSpeedLoop(void) { g_taskId = 1; Menu_SetMode(SYS_TASK_RUN); }
-static void actionGrayLine(void) { g_taskId = 2; Menu_SetMode(SYS_TASK_RUN); }
-static void actionYawStraight(void) { g_taskId = 3; target_straight_yaw = g_currentYaw; Menu_SetMode(SYS_TASK_RUN); }
-static void actionPwmTest(void) { g_taskId = 4; Menu_SetMode(SYS_TASK_RUN); }
+static void Menu_StartTask(uint8_t taskId)
+{
+    g_taskId = taskId;
+    PatrolInfo_Start(Main_GetSysTickMs());
+    (void)SerialMaixCam_SendStartRequest();
+    Menu_SetMode(SYS_TASK_RUN);
+}
+
+static void actionSpeedLoop(void) { Menu_StartTask(1U); }
+static void actionGrayLine(void) { Menu_StartTask(2U); }
+static void actionYawStraight(void) { target_straight_yaw = g_currentYaw; Menu_StartTask(3U); }
+static void actionPwmTest(void) { Menu_StartTask(4U); }
+static void actionPatrolInfo(void) { Menu_SetMode(SYS_PATROL_INFO); }
 static void actionMonitor(void) { Menu_SetMode(SYS_MONITOR); }
 static void actionCameraTest(void) { CarTest_CameraEnter(); Menu_SetMode(SYS_CAMERA_TEST); }
 static void actionGrayTest(void) { Menu_SetMode(SYS_GRAY_TEST); }
@@ -84,41 +96,45 @@ static const MenuItem_t menuItems[] = {
     { "Speed 0.5m/s",    MENU_LEAF,  actionSpeedLoop,    0, 0 },
     /* [2] 灰度循迹 */
     { "Gray Line",       MENU_LEAF,  actionGrayLine,     0, 0 },
-    /* [3] 航向保持直行 */
-    { "Yaw Straight",    MENU_LEAF,  actionYawStraight,  0, 0 },
+    /* [3] 路口判断 */
+    { "Junction",        MENU_LEAF,  actionYawStraight,  0, 0 },
     /* [4] PWM test */
     { "PWM Test",        MENU_LEAF,  actionPwmTest,      0, 0 },
     /* [5] Reserved task */
     { "Reserved",        MENU_LEAF,  NULL,               0, 0 },
-    /* [6] 状态监测 */
+    /* [6] 巡检信息 */
+    { "Patrol Info",     MENU_LEAF,  actionPatrolInfo,   0, 0 },
+    /* [7] 状态监测 */
     { "Status",          MENU_LEAF,  actionMonitor,      0, 0 },
-    /* [7] Tests */
-    { "Tests",           MENU_NODE,  NULL,               8, 5 },
-    /* [8] Camera Test */
+    /* [8] Tests */
+    { "Tests",           MENU_NODE,  NULL,               9, 5 },
+    /* [9] Camera Test */
     { "Camera Test",     MENU_LEAF,  actionCameraTest,   0, 0 },
-    /* [9] Gray Test */
+    /* [10] Gray Test */
     { "Gray Test",       MENU_LEAF,  actionGrayTest,     0, 0 },
-    /* [10] Flash Test */
+    /* [11] Flash Test */
     { "Flash Test",      MENU_LEAF,  actionFlashTest,    0, 0 },
-    /* [11] OLED CN Test */
+    /* [12] OLED CN Test */
     { "OLED CN Test",    MENU_LEAF,  actionOledCnTest,   0, 0 },
-    /* [12] 蜂鸣器和 LED 测试 */
+    /* [13] 蜂鸣器和 LED 测试 */
     { "Buzzer LED Test", MENU_LEAF,  actionBuzzerLedTest, 0, 0 },
-    /* [13] 设置 */
-    { "Settings",        MENU_NODE,  NULL,               14, 1 },
-    /* [14] PID 管理 */
-    { "PID Tune",        MENU_NODE,  NULL,               15, 4 },
-    /* [15] 左轮 PID */
+    /* [14] 设置 */
+    { "Settings",        MENU_NODE,  NULL,               15, 1 },
+    /* [15] PID 管理 */
+    { "PID Tune",        MENU_NODE,  NULL,               16, 4 },
+    /* [16] 左轮 PID */
     { "Left Wheel PID",  MENU_LEAF,  actionPIDEditLeft,  0, 0 },
-    /* [16] 右轮 PID */
+    /* [17] 右轮 PID */
     { "Right Wheel PID", MENU_LEAF,  actionPIDEditRight, 0, 0 },
-    /* [17] 灰度 PID */
+    /* [18] 灰度 PID */
     { "Gray PID",        MENU_LEAF,  actionPIDEditGray,  0, 0 },
-    /* [18] Yaw PID */
+    /* [19] Yaw PID */
     { "Yaw PID",         MENU_LEAF,  actionPIDEditYaw,   0, 0 },
 };
 
 #define MENU_ITEM_COUNT  (sizeof(menuItems) / sizeof(menuItems[0]))
+
+static const uint8_t s_topLevelItems[] = { 0U, 6U, 8U, 7U, 14U };
 
 /* ===== 内部状态 ===== */
 
@@ -133,15 +149,7 @@ static uint8_t Menu_GetStart(void)
 static uint8_t Menu_GetCount(void)
 {
     if (s_depth == 0U) {
-        /* 主菜单: Tasks(0), Tests(7), Status(6), Settings(13) */
-        uint8_t cnt = 0U;
-        uint8_t i;
-        for (i = 0U; i < MENU_ITEM_COUNT; i++) {
-            if (i == 0U || i == 6U || i == 7U || i == 13U) {
-                cnt++;
-            }
-        }
-        return cnt;
+        return (uint8_t)(sizeof(s_topLevelItems) / sizeof(s_topLevelItems[0]));
     }
     return menuItems[s_currentParent].childCount;
 }
@@ -150,10 +158,8 @@ static uint8_t Menu_GetItemIndex(uint8_t relPos)
 {
     uint8_t start = Menu_GetStart();
     if (s_depth == 0U) {
-        /* 椤跺眰鑿滃崟绱㈠紩鏄犲皠 */
-        static const uint8_t topLevel[] = { 0, 7, 6, 13 };
-        if (relPos < sizeof(topLevel)) {
-            return topLevel[relPos];
+        if (relPos < sizeof(s_topLevelItems)) {
+            return s_topLevelItems[relPos];
         }
         return 0U;
     }
@@ -262,6 +268,11 @@ void Menu_ProcessKey(uint8_t key)
     }
 
     /* 监测模式: K4 返回 */
+    if (s_mode == SYS_PATROL_INFO) {
+        s_mode = SYS_MENU;
+        return;
+    }
+
     if (s_mode == SYS_MONITOR) {
         if (key == 4U) {
             s_mode = SYS_MENU;
@@ -326,6 +337,8 @@ void Menu_ProcessKey(uint8_t key)
         if (key == 4U) {
             DCMotor_SetDuty(0, 0);
             PID_ResetAll();
+            PatrolInfo_Finish(Main_GetSysTickMs());
+            (void)SerialMaixCam_SendStopRequest();
             g_taskId = 0U; /* 清除任务编号 */
             s_mode = SYS_MENU;
         }
@@ -397,15 +410,19 @@ static void Menu_RenderMenu(void)
     uint8_t i;
     uint8_t idx;
     const char *title;
+    uint8_t titleX;
 
     OLED_Clear();
 
     if (s_depth == 0U) {
-        title = "Main Menu";
+        title = "主菜单";
+        /* 3个汉字 × 16像素 = 48像素，居中: (128-48)/2 = 40 */
+        titleX = 40U;
     } else {
         title = menuItems[s_currentParent].name;
+        titleX = 0U;
     }
-    OLED_Printf(0, 0, OLED_8X16, "%s", title);
+    OLED_Printf(titleX, 0, OLED_8X16, "%s", title);
 
     for (i = 0U; i < MENU_VISIBLE_ROWS; i++) {
         uint8_t itemPos = (uint8_t)(s_scroll + i);
@@ -469,6 +486,80 @@ static void Menu_RenderMonitor(void)
                 DCMotor_DirectionString(ms.right_dir));
     OLED_Printf(0, 48, OLED_6X8, "Cmd  L%+4d R%+4d", (int)ld, (int)rd);
     OLED_Printf(0, 56, OLED_6X8, "K4:Back");
+    OLED_Update();
+}
+
+static const char *Menu_PatrolOrderText(uint8_t index)
+{
+    static const char *orders[PATROL_INFO_MAX_RESULTS] = {
+        "一", "二", "三", "四", "五", "六"
+    };
+
+    return (index < PATROL_INFO_MAX_RESULTS) ? orders[index] : "";
+}
+
+static const char *Menu_PatrolResultText(uint8_t resultCode)
+{
+    switch (resultCode) {
+        case SERIAL_MAIXCAM_RESULT_RED_CIRCLE:
+            return "红圆";
+        case SERIAL_MAIXCAM_RESULT_RED_SQUARE:
+            return "红方";
+        case SERIAL_MAIXCAM_RESULT_GREEN_CIRCLE:
+            return "绿圆";
+        case SERIAL_MAIXCAM_RESULT_GREEN_SQUARE:
+            return "绿方";
+        default:
+            return "弃";
+    }
+}
+
+static void Menu_RenderPatrolInfo(void)
+{
+    PatrolInfoSnapshot_t info;
+    uint8_t line;
+
+    PatrolInfo_GetSnapshot(&info);
+
+    OLED_Clear();
+
+    if (info.storageValid == 0U) {
+        OLED_Printf(32, 0, OLED_8X16, "巡检信息");
+        OLED_Printf(40, 24, OLED_8X16, "无记录");
+        OLED_Printf(0, 56, OLED_6X8, "K4:Back");
+        OLED_Update();
+        return;
+    }
+
+    OLED_Printf(0, 0, OLED_8X16, "巡检用时%lus", (unsigned long)info.elapsedSeconds);
+
+    for (line = 0U; line < 3U; line++) {
+        uint8_t first = (uint8_t)(line * 2U);
+        uint8_t second = (uint8_t)(first + 1U);
+        uint8_t y = (uint8_t)(16U + line * 16U);
+
+        if (first >= info.count) {
+            break;
+        }
+
+        if (second < info.count) {
+            OLED_Printf(0, y, OLED_8X16, "%s%s %s%s",
+                        Menu_PatrolOrderText(first),
+                        Menu_PatrolResultText(info.results[first]),
+                        Menu_PatrolOrderText(second),
+                        Menu_PatrolResultText(info.results[second]));
+        } else {
+            OLED_Printf(0, y, OLED_8X16, "%s%s",
+                        Menu_PatrolOrderText(first),
+                        Menu_PatrolResultText(info.results[first]));
+        }
+    }
+
+    if (info.count == 0U) {
+        OLED_Printf(0, 24, OLED_8X16, "无");
+    }
+
+    OLED_Printf(0, 56, OLED_6X8, "Any key:Back");
     OLED_Update();
 }
 
@@ -559,6 +650,9 @@ void Menu_Render(void)
             break;
         case SYS_MONITOR:
             Menu_RenderMonitor();
+            break;
+        case SYS_PATROL_INFO:
+            Menu_RenderPatrolInfo();
             break;
         case SYS_PID_EDIT:
             Menu_RenderPIDEdit();

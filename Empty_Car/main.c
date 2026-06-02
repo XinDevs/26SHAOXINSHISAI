@@ -19,6 +19,7 @@
 #include "pid.h"
 #include "serial_cmd.h"
 #include "serial_maixcam.h"
+#include "patrol_info.h"
 #include "serial_report.h"
 #include "oled_ui.h"
 #include "OLED.h"
@@ -28,6 +29,7 @@
 #include "buzzer_led.h"
 #include "main.h"
 #include "menu.h"
+
 #include <stdio.h>
 #include <math.h>
 #include <stdint.h>
@@ -51,6 +53,21 @@ static float GYRO_DIR_X = 1.0f;
 static float GYRO_DIR_Y = 1.0f;
 static float GYRO_DIR_Z = -1.0f;  /* Z 轴反向，适配安装方向 */
 
+uint32_t Main_GetSysTickMs(void)
+{
+    uint32_t nowMs;
+    uint32_t primask;
+
+    primask = __get_PRIMASK();
+    __disable_irq();
+    nowMs = g_sysTickMs;
+    if (primask == 0U) {
+        __enable_irq();
+    }
+
+    return nowMs;
+}
+
 /**
  * @brief  系统主入口
  */
@@ -66,26 +83,24 @@ int main(void)
     Serial1_Init();
     SerialMaixCam_Init();
     Flash_Init();
+    PatrolInfo_Init();
     Serial0_SendString("@BOOT:Serial Ready\r\n");
-    imuId = Init_ICM42688();
-    OLEDUI_InitStatus(imuId);
 
     DCMotor_Init();
     encoder_init();
     PID_Init();
     PID_UpdateYawFeedback(g_currentYaw);
-
     DCMotor_Enable(1U);
     DCMotor_SetDuty(0, 0);
-
+     /* ===== icm42688初始化 ===== */
+    imuId = Init_ICM42688();
+    OLEDUI_InitStatus(imuId);
    // IMU_Calibrate();
    // Mahony_Init(100.0f);
     //Get_Acc_ICM42688();
    // Get_Gyro_ICM42688();
     //MahonyAHRSinit(icm42688_acc_x, icm42688_acc_y, icm42688_acc_z, 0.0f, 0.0f, 0.0f);
     //ICM42688_ResetYawZero();
-
-    OLEDUI_InitStatus(imuId);
 
     NVIC_ClearPendingIRQ(TIMER_FOR_1MS_INST_INT_IRQN);
     NVIC_EnableIRQ(TIMER_FOR_1MS_INST_INT_IRQN);
@@ -95,11 +110,10 @@ int main(void)
     /* ===== PID 参数初始化 ===== */
     PID_SPEED_INIT(0.2f, 0.15f, 0.08f,
                    0.2f, 0.15f, 0.08f);
-    PID_Grayscale_Init(0.35f, 0.0f, 1.5f);
+    PID_Grayscale_Init(0.5f, 0.0f, 0.0f);
     PID_Yaw_Init(0.03f, 0.0f, 0.2f);
     /* ===== 主循环 ===== */
     while (1) {
-        // DCMotor_SetDuty(0, PWM_TEST_DUTY);
         /* 1) 按键处理 */
         keyNum = Key_GetNum();
         if (keyNum != 0U) {
@@ -141,10 +155,16 @@ int main(void)
                     break;
 
                 case 3U:
-                    /* 航向保持直行：Yaw 外环 + 速度内环串级 PID */
-                    PID_ExecuteYawCascade(BASE_STRAIGHT_SPEED,
-                                          target_straight_yaw,
-                                          MAX_YAW_SPEED_DIFF);
+                    /* 灰度循迹，遇到 Y 型岔路口停车 */
+                    if (PID_Gray_IsYJunction() != 0U) {
+                        PID_GoalSpeedPair_Set(0.0f, 0.0f);
+                        PID_ExecuteSpeedInnerLoop();
+                    } else {
+                        PID_ExecuteGrayCascade(BASE_LINE_SPEED,
+                                               0.0f,
+                                               MAX_LINE_SPEED_DIFF,
+                                               g_currentYaw);
+                    }
                     break;
 
                 default:
@@ -163,7 +183,9 @@ int main(void)
         }
 
         /* 4) MaixCam 通信 */
-        (void)SerialMaixCam_Process();
+        if (SerialMaixCam_Process() != 0U) {
+            PatrolInfo_RecordResult(SerialMaixCam_GetResultCode());
+        }
 
         /* 5) OLED 刷新(每 100ms) */
         if (g_oledRefreshFlag != 0U) {
@@ -172,6 +194,7 @@ int main(void)
             switch (Menu_GetMode()) {
                 case SYS_MENU:
                 case SYS_MONITOR:
+                case SYS_PATROL_INFO:
                 case SYS_PID_EDIT:
                 case SYS_FLASH_TEST:
                 case SYS_GRAY_TEST:

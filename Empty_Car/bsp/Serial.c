@@ -24,16 +24,16 @@ volatile uint8_t Serial_RxFlag[SERIAL_PORT_COUNT] = {0U, 0U, 0U}; // 扩充为3�
 #define SERIAL_PARSE_WAIT_LF    2U
 #define SERIAL_CAM_PARSE_WAIT_HEAD    0U
 #define SERIAL_CAM_PARSE_WAIT_LENGTH  1U
-#define SERIAL_CAM_PARSE_WAIT_PAYLOAD 2U
+#define SERIAL_CAM_PARSE_IN_PAYLOAD   2U
 #define SERIAL_CAM_PARSE_WAIT_TAIL    3U
 
 #define SERIAL_CAM_FRAME_HEAD   0xFFU
-#define SERIAL_CAM_FRAME_LEN    0x01U
 #define SERIAL_CAM_FRAME_TAIL   0xFEU
 
 static uint8_t s_rxPacketDoubleBuf[SERIAL_PORT_COUNT][2][SERIAL_PACKET_SIZE];
 static volatile uint8_t s_rxWriteBufIndex[SERIAL_PORT_COUNT] = {0U, 0U, 0U}; // 扩充
 static volatile uint16_t s_rxWritePos[SERIAL_PORT_COUNT] = {0U, 0U, 0U};     // 扩充
+static volatile uint16_t s_rxExpectedLen[SERIAL_PORT_COUNT] = {0U, 0U, 0U};   // 摄像头帧长度
 static volatile uint8_t s_rxParseState[SERIAL_PORT_COUNT] = {
     SERIAL_PARSE_WAIT_HEAD,
     SERIAL_PARSE_WAIT_HEAD,
@@ -251,12 +251,16 @@ static void Serial_HandleFrameComplete(uint8_t uartId)
     Serial_DMA_RxEvent(uartId, payloadLen);
 }
 
-static void Serial_HandleCameraFrameComplete(uint8_t payload)
+static void Serial_HandleCameraFrameComplete(uint16_t payloadLen)
 {
     uint8_t frameIndex = s_rxWriteBufIndex[SERIAL_UART2];
 
-    s_rxPacketDoubleBuf[SERIAL_UART2][frameIndex][0] = payload;
-    Serial_DMA_RxEvent(SERIAL_UART2, 1U);
+    if (payloadLen >= SERIAL_PACKET_SIZE) {
+        payloadLen = SERIAL_PACKET_SIZE - 1U;
+    }
+
+    s_rxPacketDoubleBuf[SERIAL_UART2][frameIndex][payloadLen] = '\0';
+    Serial_DMA_RxEvent(SERIAL_UART2, payloadLen);
 }
 
 static void Serial_PushCameraReceivedByte(uint8_t data)
@@ -264,38 +268,52 @@ static void Serial_PushCameraReceivedByte(uint8_t data)
     switch (s_rxParseState[SERIAL_UART2]) {
         case SERIAL_CAM_PARSE_WAIT_HEAD:
             if (data == SERIAL_CAM_FRAME_HEAD) {
+                s_rxWritePos[SERIAL_UART2] = 0U;
+                s_rxExpectedLen[SERIAL_UART2] = 0U;
                 s_rxParseState[SERIAL_UART2] = SERIAL_CAM_PARSE_WAIT_LENGTH;
             }
             break;
 
         case SERIAL_CAM_PARSE_WAIT_LENGTH:
-            if (data == SERIAL_CAM_FRAME_LEN) {
-                s_rxParseState[SERIAL_UART2] = SERIAL_CAM_PARSE_WAIT_PAYLOAD;
-            } else if (data == SERIAL_CAM_FRAME_HEAD) {
-                s_rxParseState[SERIAL_UART2] = SERIAL_CAM_PARSE_WAIT_LENGTH;
+            if ((data > 0U) && (data < SERIAL_PACKET_SIZE)) {
+                s_rxWritePos[SERIAL_UART2] = 0U;
+                s_rxExpectedLen[SERIAL_UART2] = data;
+                s_rxParseState[SERIAL_UART2] = SERIAL_CAM_PARSE_IN_PAYLOAD;
             } else {
+                s_rxWritePos[SERIAL_UART2] = 0U;
+                s_rxExpectedLen[SERIAL_UART2] = 0U;
                 s_rxParseState[SERIAL_UART2] = SERIAL_CAM_PARSE_WAIT_HEAD;
             }
             break;
 
-        case SERIAL_CAM_PARSE_WAIT_PAYLOAD:
-            s_rxPacketDoubleBuf[SERIAL_UART2][s_rxWriteBufIndex[SERIAL_UART2]][0] = data;
-            s_rxParseState[SERIAL_UART2] = SERIAL_CAM_PARSE_WAIT_TAIL;
+        case SERIAL_CAM_PARSE_IN_PAYLOAD:
+            s_rxPacketDoubleBuf[SERIAL_UART2][s_rxWriteBufIndex[SERIAL_UART2]]
+                               [s_rxWritePos[SERIAL_UART2]++] = data;
+            if (s_rxWritePos[SERIAL_UART2] >= s_rxExpectedLen[SERIAL_UART2]) {
+                s_rxParseState[SERIAL_UART2] = SERIAL_CAM_PARSE_WAIT_TAIL;
+            }
             break;
 
         case SERIAL_CAM_PARSE_WAIT_TAIL:
             if (data == SERIAL_CAM_FRAME_TAIL) {
-                Serial_HandleCameraFrameComplete(
-                    s_rxPacketDoubleBuf[SERIAL_UART2][s_rxWriteBufIndex[SERIAL_UART2]][0]);
+                Serial_HandleCameraFrameComplete(s_rxExpectedLen[SERIAL_UART2]);
+                s_rxWritePos[SERIAL_UART2] = 0U;
+                s_rxExpectedLen[SERIAL_UART2] = 0U;
                 s_rxParseState[SERIAL_UART2] = SERIAL_CAM_PARSE_WAIT_HEAD;
             } else if (data == SERIAL_CAM_FRAME_HEAD) {
+                s_rxWritePos[SERIAL_UART2] = 0U;
+                s_rxExpectedLen[SERIAL_UART2] = 0U;
                 s_rxParseState[SERIAL_UART2] = SERIAL_CAM_PARSE_WAIT_LENGTH;
             } else {
+                s_rxWritePos[SERIAL_UART2] = 0U;
+                s_rxExpectedLen[SERIAL_UART2] = 0U;
                 s_rxParseState[SERIAL_UART2] = SERIAL_CAM_PARSE_WAIT_HEAD;
             }
             break;
 
         default:
+            s_rxWritePos[SERIAL_UART2] = 0U;
+            s_rxExpectedLen[SERIAL_UART2] = 0U;
             s_rxParseState[SERIAL_UART2] = SERIAL_CAM_PARSE_WAIT_HEAD;
             break;
     }
@@ -369,6 +387,7 @@ void Serial_Init(uint8_t uartId)
 
     s_rxWriteBufIndex[uartId] = 0U;
     s_rxWritePos[uartId] = 0U;
+    s_rxExpectedLen[uartId] = 0U;
     s_rxParseState[uartId] = SERIAL_PARSE_WAIT_HEAD;
     s_rxDmaActiveIndex[uartId] = 0U;
 

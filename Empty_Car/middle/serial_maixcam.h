@@ -43,6 +43,17 @@
 extern "C" {
 #endif
 
+/*
+ * Current MaixCam frame:
+ *   TX/RX: 0xFF, length, payload bytes, 0xFE
+ *   STM32 -> MaixCam:
+ *     0xFF 0x01 0x05 0xFE: start sending results
+ *     0xFF 0x01 0x06 0xFE: stop sending results
+ *   MaixCam -> STM32 result payload length is 0x01.
+ */
+#define SERIAL_MAIXCAM_CMD_START_REQUEST 0x05U
+#define SERIAL_MAIXCAM_CMD_STOP_REQUEST  0x06U
+
 #define SERIAL_MAIXCAM_RESULT_NONE          0x00U
 #define SERIAL_MAIXCAM_RESULT_RED_CIRCLE    0x01U
 #define SERIAL_MAIXCAM_RESULT_RED_SQUARE    0x02U
@@ -62,6 +73,9 @@ uint8_t SerialMaixCam_Process(void);
 const char *SerialMaixCam_GetCommand(void);
 
 uint8_t SerialMaixCam_GetResultCode(void);
+
+uint8_t SerialMaixCam_SendStartRequest(void);
+uint8_t SerialMaixCam_SendStopRequest(void);
 
 /**
  * @brief  鍚?MaixCam 鍙戦€佸懡浠わ紙闈為樆濉烇級锛岃嚜鍔ㄦ嫾鎺?@ 鍓嶇紑涓?\r\n 鍚庣紑
