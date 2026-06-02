@@ -137,14 +137,14 @@ float PID_Calculate_Step(PID_TypeDef *pid, float target, float actual)
 void PID_Init(void)
 {
     // 初始化 PID 输出/积分限幅 - 左轮速度环
-    PID_Left_Speed.OutputMax = 1.0f;
+    PID_Left_Speed.OutputMax = 0.99f;
     /* 编码器仅可靠读取正向速度，禁用负向输出避免反转失控 */
     PID_Left_Speed.OutputMin = 0.0f;
     PID_Left_Speed.IntegralMax = 6.0f;
     PID_Left_Speed.IntegralMin = -6.0f;
 
     // 初始化 PID 输出/积分限幅 - 右轮速度环
-    PID_Right_Speed.OutputMax = 1.0f;
+    PID_Right_Speed.OutputMax = 0.99f;
     /* 编码器仅可靠读取正向速度，禁用负向输出避免反转失控 */
     PID_Right_Speed.OutputMin = 0.0f;
     PID_Right_Speed.IntegralMax = 6.0f;

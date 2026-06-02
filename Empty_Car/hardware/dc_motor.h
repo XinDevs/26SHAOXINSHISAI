@@ -1,7 +1,7 @@
-/**
+﻿/**
  * @file    dc_motor.h
- * @brief   双路直流电机PWM驱动 — 头文件
- * @details 声明电机初始化、使能、占空比设置、停止及状态查询接口。
+ * @brief   鍙岃矾鐩存祦鐢垫満PWM椹卞姩 鈥?澶存枃浠?
+ * @details 澹版槑鐢垫満鍒濆鍖栥€佷娇鑳姐€佸崰绌烘瘮璁剧疆銆佸仠姝㈠強鐘舵€佹煡璇㈡帴鍙ｃ€?
  */
 #ifndef ICODE_DC_MOTOR_H_
 #define ICODE_DC_MOTOR_H_
@@ -27,33 +27,37 @@ typedef struct {
 } DCMotor_Status_t;
 
 /**
- * @brief  直流电机驱动初始化
+ * @brief  鐩存祦鐢垫満椹卞姩鍒濆鍖?
  */
 void DCMotor_Init(void);
 /**
- * @brief  使能或关闭电机输出
- * @param  enable 0: 关闭, 非0: 使能
+ * @brief  浣胯兘鎴栧叧闂數鏈鸿緭鍑?
+ * @param  enable 0: 鍏抽棴, 闈?: 浣胯兘
  */
 void DCMotor_Enable(uint8_t enable);
 /**
- * @brief  设置左右电机占空比
- * @param  left_duty_percent 左轮占空比(-100~100)
- * @param  right_duty_percent 右轮占空比(-100~100)
+ * @brief  璁剧疆宸﹀彸鐢垫満鍗犵┖姣?
+ * @param  left_duty_percent 宸﹁疆鍗犵┖姣?-100~100)
+ * @param  right_duty_percent 鍙宠疆鍗犵┖姣?-100~100)
  */
 void DCMotor_SetDuty(int16_t left_duty_percent, int16_t right_duty_percent);
 /**
- * @brief  停止双电机输出
+ * @brief  鍋滄鍙岀數鏈鸿緭鍑?
  */
 void DCMotor_Stop(void);
 /**
- * @brief  获取电机状态快照
- * @param  status 输出状态结构体指针
+ * @brief  刹车双电机，短接 H 桥输出以减小惯性滑行。
+ */
+void DCMotor_Brake(void);
+/**
+ * @brief  鑾峰彇鐢垫満鐘舵€佸揩鐓?
+ * @param  status 杈撳嚭鐘舵€佺粨鏋勪綋鎸囬拡
  */
 void DCMotor_GetStatus(DCMotor_Status_t *status);
 /**
- * @brief  将方向枚举转为字符串
- * @param  dir 方向枚举
- * @retval 方向字符串(FWD/BWD/STP)
+ * @brief  灏嗘柟鍚戞灇涓捐浆涓哄瓧绗︿覆
+ * @param  dir 鏂瑰悜鏋氫妇
+ * @retval 鏂瑰悜瀛楃涓?FWD/BWD/STP)
  */
 const char *DCMotor_DirectionString(DCMotor_Direction_t dir);
 
@@ -62,3 +66,4 @@ const char *DCMotor_DirectionString(DCMotor_Direction_t dir);
 #endif
 
 #endif /* ICODE_DC_MOTOR_H_ */
+

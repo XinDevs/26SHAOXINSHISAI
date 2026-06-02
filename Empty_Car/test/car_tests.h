@@ -11,6 +11,14 @@ typedef struct {
     uint8_t grayStatus;
 } CarTestState_t;
 
+/* 速度环测试：左右轮以目标速度运行 */
+void CarTest_SpeedLoop(void);
+
+/* PWM测试：右电机固定占空比输出 */
+void CarTest_PwmTest(void);
+
+void CarTest_RenderSpeedLoop(void);
+void CarTest_RenderPwm(void);
 void CarTest_FlashRun(CarTestState_t *state);
 void CarTest_RenderFlash(const CarTestState_t *state);
 void CarTest_RenderGray(CarTestState_t *state);

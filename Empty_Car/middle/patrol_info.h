@@ -74,6 +74,12 @@ void PatrolInfo_RecordResult(uint8_t resultCode);
 void PatrolInfo_Finish(uint32_t nowMs);
 
 /**
+ * @brief  取消当前巡检任务
+ * @details 手动退出时调用，不保存本次数据，也不覆盖上一次成功记录。
+ */
+void PatrolInfo_Cancel(void);
+
+/**
  * @brief  获取当前巡检信息快照
  * @param  snapshot 输出参数，指向 PatrolInfoSnapshot_t 结构体
  * @details 将当前巡检状态复制到传入的结构体中，供外部读取显示。

@@ -1,11 +1,12 @@
-﻿/**
+/**
  * @file    main.c
  * @brief   智能巡线小车主程序
  * @details 基于 TI MSPM0G3507 的双轮差速小车，包含以下运行任务：
- *          - 任务1：速度环测试，左右轮目标速度 0.5m/s
- *          - 任务2：灰度循迹，灰度外环 + 速度内环串级 PID
- *          - 任务3：航向保持直行，Yaw 外环 + 速度内环串级 PID
- *          - 任务4：左右电机 PWM 测试，固定占空比输出
+ *          - 任务1：循迹，遇到 Y 路口后停车等待 MaixCam 识别并转向
+ *          - 任务2：循迹，遇到 Y 路口后随机左/右转
+ *          - 任务3：灰度循迹，灰度外环 + 速度内环串级 PID
+ *          - 任务4：灰度循迹，遇到 Y 型岔路口停车
+ *          - 任务5：预留
  *          定时器 1ms 中断驱动：10ms IMU 更新、20ms PID 触发、100ms OLED 刷新。
  *          支持串口在线调参和 OLED 菜单测试页。
  */
@@ -19,15 +20,18 @@
 #include "pid.h"
 #include "serial_cmd.h"
 #include "serial_maixcam.h"
-#include "patrol_info.h"
 #include "serial_report.h"
+#include "patrol_info.h"
 #include "oled_ui.h"
 #include "OLED.h"
 #include "grayscale_sensor.h"
 #include "MahonyAHRS.h"
 #include "icm42688_driver.h"
 #include "buzzer_led.h"
+#include "test/car_tests.h"
+#include "car_turn.h"
 #include "main.h"
+#include "main_helpers.h"
 #include "menu.h"
 
 #include <stdio.h>
@@ -37,45 +41,48 @@
 #include <string.h>
 
 /* ===== ISR 写入、主循环读取的时序标志 ===== */
-static volatile uint8_t  g_oledRefreshFlag      = 1U;
-static volatile uint16_t g_speedPidPendingCount = 0U;
-static volatile uint32_t g_sysTickMs            = 0U;
+volatile uint8_t  OledFlag              = 1U;
+static volatile uint8_t  ReportFlag     = 0U;
+static volatile uint16_t PidPending = 0U;
+volatile uint32_t SysMs                   = 0U;
 
 /* ===== 共享状态变量，供菜单等模块访问 ===== */
-uint8_t  g_taskId            = 0U;   /* 当前任务编号: 0=待机, 1=速度环, 2=灰度, 3=航向角, 4=PWM测试 */
-float    target_straight_yaw = 0.0f; /* 任务3航向直行的目标航向角(deg) */
+uint8_t  TaskId            = 0U;
+float    TargetYaw = 0.0f;
 
 /* ===== IMU 航向角反馈量，全局共享 ===== */
-volatile float g_currentYaw = 0.0f;
+volatile float CurrentYaw = 0.0f;
 
 /* 陀螺仪方向修正系数 */
-static float GYRO_DIR_X = 1.0f;
-static float GYRO_DIR_Y = 1.0f;
-static float GYRO_DIR_Z = -1.0f;  /* Z 轴反向，适配安装方向 */
+static float GyroDirX = 1.0f;
+static float GyroDirY = 1.0f;
+static float GyroDirZ = -1.0f;  /* Z 轴反向，适配安装方向 */
 
-uint32_t Main_GetSysTickMs(void)
-{
-    uint32_t nowMs;
-    uint32_t primask;
+typedef enum {
+    TASK_TRACE = 0,
+    TASK_CAMERA,
+    TASK_TURN,
+    TASK_FINISH
+} TaskState_t;
 
-    primask = __get_PRIMASK();
-    __disable_irq();
-    nowMs = g_sysTickMs;
-    if (primask == 0U) {
-        __enable_irq();
-    }
-
-    return nowMs;
-}
+static TaskState_t TaskState = TASK_TRACE;
+static uint32_t CameraStartMs = 0U;
+static uint8_t CameraReady = 0U;
+static uint8_t CameraCode = SERIAL_MAIXCAM_RESULT_NONE;
 
 /**
  * @brief  系统主入口
  */
 int main(void)
 {
-    int16_t leftDutyCmdNow, rightDutyCmdNow;
-    uint8_t keyNum;
-    uint8_t imuId;
+    int16_t LeftDuty, RightDuty;
+    uint8_t TurnLeft;
+    uint8_t Key;
+    uint8_t ImuId;
+    uint8_t DutyReady;
+    uint8_t LineState;
+    SystemMode_t Mode;
+    SerialReportSnapshot_t Report;
 
     /* ===== 外设初始化 ===== */
     SYSCFG_DL_init();
@@ -89,18 +96,18 @@ int main(void)
     DCMotor_Init();
     encoder_init();
     PID_Init();
-    PID_UpdateYawFeedback(g_currentYaw);
+    PID_UpdateYawFeedback(CurrentYaw);
     DCMotor_Enable(1U);
     DCMotor_SetDuty(0, 0);
-     /* ===== icm42688初始化 ===== */
-    imuId = Init_ICM42688();
-    OLEDUI_InitStatus(imuId);
-   // IMU_Calibrate();
-   // Mahony_Init(100.0f);
-    //Get_Acc_ICM42688();
-   // Get_Gyro_ICM42688();
-    //MahonyAHRSinit(icm42688_acc_x, icm42688_acc_y, icm42688_acc_z, 0.0f, 0.0f, 0.0f);
-    //ICM42688_ResetYawZero();
+    /* ===== ICM42688 初始化 ===== */
+    ImuId = Init_ICM42688();
+    OLEDUI_InitStatus(ImuId);
+    IMU_Calibrate();
+    Mahony_Init(100.0f);
+    Get_Acc_ICM42688();
+    Get_Gyro_ICM42688();
+    MahonyAHRSinit(icm42688_acc_x, icm42688_acc_y, icm42688_acc_z, 0.0f, 0.0f, 0.0f);
+    ICM42688_ResetYawZero();
 
     NVIC_ClearPendingIRQ(TIMER_FOR_1MS_INST_INT_IRQN);
     NVIC_EnableIRQ(TIMER_FOR_1MS_INST_INT_IRQN);
@@ -110,86 +117,257 @@ int main(void)
     /* ===== PID 参数初始化 ===== */
     PID_SPEED_INIT(0.2f, 0.15f, 0.08f,
                    0.2f, 0.15f, 0.08f);
-    PID_Grayscale_Init(0.5f, 0.0f, 0.0f);
+    PID_Grayscale_Init(0.5f, 0.0f, 0.15f);
     PID_Yaw_Init(0.03f, 0.0f, 0.2f);
     /* ===== 主循环 ===== */
     while (1) {
         /* 1) 按键处理 */
-        keyNum = Key_GetNum();
-        if (keyNum != 0U) {
-            Menu_ProcessKey(keyNum);
-            g_oledRefreshFlag = 1U;
-        }
-
-        if ((Menu_GetMode() == SYS_TASK_RUN) && (g_taskId == 4U)) {
-            DCMotor_SetDuty(0, PWM_TEST_DUTY);
+        Key = Key_GetNum();
+        if (Key != 0U) {
+            Menu_ProcessKey(Key);
+            OledFlag = 1U;
         }
 
         /* 2) 20ms PID 控制事件 */
-        if (g_speedPidPendingCount > 0U) {
-            g_speedPidPendingCount = 0U;
+        if (PidPending > 0U) {
+            PidPending = 0U;
+            DutyReady = 0U;
+            Mode = Menu_GetMode();
 
             (void)grayscale_update_sensor_array();
 
-            /* 仅在任务运行模式下执行 PID 控制 */
-            if (Menu_GetMode() != SYS_TASK_RUN) {
-                goto pid_done;
+            if ((Mode != SYS_TASK_RUN) || ((TaskId != 1U) && (TaskId != 2U))) {
+                TaskState = TASK_TRACE;
+                CameraReady = 0U;
+                CameraCode = SERIAL_MAIXCAM_RESULT_NONE;
+                Turn_Reset();
+                Main_ResetStartFinishLineState();
             }
-            if (g_taskId == 4U) {
-                goto pid_done;
-            }
 
-            switch (g_taskId) {
-                case 1U:
-                    /* 速度环测试：左右轮目标速度 0.5m/s */
-                    PID_GoalSpeedPair_Set(BASE_SPEED_TEST, BASE_SPEED_TEST);
-                    PID_ExecuteSpeedInnerLoop();
-                    break;
+            /* 正式任务选择 */
+            if (Mode == SYS_TASK_RUN) {
+                switch (TaskId) {
+                    case 1U:
+                        /* 任务1：循迹行驶，遇到 Y 路口时停车等待摄像头给出转向。 */
+                        switch (TaskState) {
+                            case TASK_TRACE:
+                                /*
+                                 * 循迹状态：
+                                 * - 每 20ms 检查一次横线；
+                                 * - 第一次横线只记录为起点，车辆继续循迹；
+                                 * - 第二次横线才认为到达终点，切到 TASK_FINISH；
+                                 * - 只有未压在横线上时才检测 Y 路口，避免横线全亮误判为路口。
+                                 */
+                                LineState = Main_CheckStartFinishLineCrossing();
+                                if (LineState >= 2U) {
+                                    /* 第二次经过起终点线：准备结束任务。 */
+                                    TaskState = TASK_FINISH;
+                                } else if ((LineState == 0U) &&
+                                           (PID_Gray_IsYJunction() != 0U)) {
+                                    /* 检测到 Y 路口：先刹停，再请求 MaixCam 识别红/绿方向。 */
+                                    DCMotor_Brake();
+                                    PID_ResetAll();
+                                    CameraReady = 0U;
+                                    CameraCode = SERIAL_MAIXCAM_RESULT_NONE;
+                                    CameraStartMs = SysMs;
+                                    (void)SerialMaixCam_SendStartRequest();
+                                    TaskState = TASK_CAMERA;
+                                } else {
+                                    /* 未到终点、未到路口：正常灰度循迹。 */
+                                    PID_ExecuteGrayCascade(BASE_LINE_SPEED,
+                                                           0.0f,
+                                                           LINE_SPEED_DIFF_SCALE);
+                                    DutyReady = 1U;
+                                }
+                                break;
 
-                case 2U:
-                    /* 灰度循迹：灰度外环 + 速度内环串级 PID */
-                    PID_ExecuteGrayCascade(BASE_LINE_SPEED,
-                                           0.0f,
-                                           MAX_LINE_SPEED_DIFF,
-                                           g_currentYaw);
-                    break;
+                            case TASK_CAMERA:
+                                /*
+                                 * 摄像头等待状态：
+                                 * - 收到结果后按 CameraDirection() 转成左右转命令；
+                                 * - 超时仍无结果时默认左转，防止一直停在路口。
+                                 */
+                                if (CameraReady != 0U) {
+                                    /* MaixCam 返回有效结果，按识别结果开始转弯。 */
+                                    TurnLeft = CameraDirection(CameraCode);
+                                    CameraReady = 0U;
+                                    PID_ResetAll();
+                                    Turn_Start(TurnLeft, SPIN_TO_LINE_SPEED_MPS, SysMs);
+                                    TaskState = TASK_TURN;
+                                } else if ((uint32_t)(SysMs - CameraStartMs) >= CAMERA_TURN_TIMEOUT_MS) {
+                                    /* 摄像头超时：使用默认左转策略继续任务。 */
+                                    PID_ResetAll();
+                                    Turn_Start(1U, SPIN_TO_LINE_SPEED_MPS, SysMs);
+                                    TaskState = TASK_TURN;
+                                }
+                                break;
 
-                case 3U:
-                    /* 灰度循迹，遇到 Y 型岔路口停车 */
-                    if (PID_Gray_IsYJunction() != 0U) {
-                        PID_GoalSpeedPair_Set(0.0f, 0.0f);
-                        PID_ExecuteSpeedInnerLoop();
-                    } else {
+                            case TASK_TURN:
+                                /*
+                                 * 转弯状态：
+                                 * Turn_Run() 持续执行原地/差速转向；
+                                 * Turn_IsDone() 在延时后检测回到线，确认完成后回到循迹。
+                                 */
+                                Turn_Run();
+                                if (Turn_IsDone(SysMs, TURN_LINE_DETECT_DELAY_MS) != 0U) {
+                                    /* 已重新压上线：清掉路口锁存和 PID 历史，恢复循迹。 */
+                                    Turn_Reset();
+                                    PID_ResetAll();
+                                    PID_Gray_ResetYJunctionState();
+                                    TaskState = TASK_TRACE;
+                                    PID_ExecuteGrayCascade(BASE_LINE_SPEED,
+                                                           0.0f,
+                                                           LINE_SPEED_DIFF_SCALE);
+                                    DutyReady = 1U;
+                                } else {
+                                    /* 还在转弯过程中：继续输出 Turn_Run() 写入的电机指令。 */
+                                    DutyReady = 1U;
+                                }
+                                break;
+
+                            case TASK_FINISH:
+                                /* 终点状态：复位横线计数，主动刹车，记录完成信息并返回菜单。 */
+                                TaskState = TASK_TRACE;
+                                Main_ResetStartFinishLineState();
+                                Main_BrakeTaskAndReturnMenu();
+                                break;
+
+                            default:
+                                /* 异常状态保护：回到循迹并清理转向/PID 状态。 */
+                                TaskState = TASK_TRACE;
+                                Turn_Reset();
+                                PID_ResetAll();
+                                break;
+                        }
+                        break;
+
+                    case 2U:
+                        switch (TaskState) {
+                            case TASK_TRACE:
+                                /* 正常循迹；第一次横线为起点，第二次横线才是终点。 */
+                                LineState = Main_CheckStartFinishLineCrossing();
+                                if (LineState >= 2U) {
+                                    TaskState = TASK_FINISH;
+                                } else if ((LineState == 0U) &&
+                                           (PID_Gray_IsYJunction() != 0U)) {
+                                    TurnLeft = RandomDirection();
+                                    PID_ResetAll();
+                                    Turn_Start(TurnLeft, SPIN_TO_LINE_SPEED_MPS, SysMs);
+                                    TaskState = TASK_TURN;
+                                } else {
+                                    PID_ExecuteGrayCascade(BASE_LINE_SPEED,
+                                                           0.0f,
+                                                           LINE_SPEED_DIFF_SCALE);
+                                    DutyReady = 1U;
+                                }
+                                break;
+
+                            case TASK_TURN:
+                                /* 转弯到位后回到循迹，后续再遇到路口可再次转弯。 */
+                                Turn_Run();
+                                if (Turn_IsDone(SysMs, TURN_LINE_DETECT_DELAY_MS) != 0U) {
+                                    Turn_Reset();
+                                    PID_ResetAll();
+                                    PID_Gray_ResetYJunctionState();
+                                    TaskState = TASK_TRACE;
+                                    PID_ExecuteGrayCascade(BASE_LINE_SPEED,
+                                                           0.0f,
+                                                           LINE_SPEED_DIFF_SCALE);
+                                    DutyReady = 1U;
+                                } else {
+                                    DutyReady = 1U;
+                                }
+                                break;
+
+                            case TASK_FINISH:
+                                /* 终点主动刹车并返回菜单。 */
+                                TaskState = TASK_TRACE;
+                                Main_ResetStartFinishLineState();
+                                Main_BrakeTaskAndReturnMenu();
+                                break;
+
+                            default:
+                                TaskState = TASK_TRACE;
+                                Turn_Reset();
+                                PID_ResetAll();
+                                break;
+                        }
+                        break;
+
+                    case 3U:
+                        /* 灰度循迹：灰度外环 + 速度内环串级 PID。 */
                         PID_ExecuteGrayCascade(BASE_LINE_SPEED,
                                                0.0f,
-                                               MAX_LINE_SPEED_DIFF,
-                                               g_currentYaw);
-                    }
+                                               LINE_SPEED_DIFF_SCALE);
+                        DutyReady = 1U;
+                        break;
+
+                    case 4U:
+                        /* 灰度循迹，遇到 Y 型岔路口停车。 */
+                        if (PID_Gray_IsYJunction() != 0U) {
+                            Main_StopTaskAndReturnMenu();
+                        } else {
+                            PID_ExecuteGrayCascade(BASE_LINE_SPEED,
+                                                   0.0f,
+                                                   LINE_SPEED_DIFF_SCALE);
+                            DutyReady = 1U;
+                        }
+                        break;
+
+                    default:
+                        PID_ResetRuntimeState(CurrentYaw);
+                        TaskState = TASK_TRACE;
+                        Turn_Reset();
+                        break;
+                }
+            }
+
+            /* 测试模式选择 */
+            switch (Mode) {
+                case SYS_SPEED_LOOP_TEST:
+                    CarTest_SpeedLoop();
+                    DutyReady = 1U;
+                    break;
+
+                case SYS_PWM_TEST:
+                    CarTest_PwmTest();
                     break;
 
                 default:
-                    PID_ResetRuntimeState(g_currentYaw);
                     break;
             }
 
-            PID_GetDutyCmd(&leftDutyCmdNow, &rightDutyCmdNow);
-            DCMotor_SetDuty(leftDutyCmdNow, rightDutyCmdNow);
-            pid_done:;
+            if (DutyReady != 0U) {
+                PID_GetDutyCmd(&LeftDuty, &RightDuty);
+                DCMotor_SetDuty(LeftDuty, RightDuty);
+            }
         }
 
         /* 3) 串口命令处理 */
-        if (SerialCmd_Process(g_currentYaw) != 0U) {
+        if (SerialCmd_Process(CurrentYaw) != 0U) {
             continue;
         }
 
         /* 4) MaixCam 通信 */
         if (SerialMaixCam_Process() != 0U) {
-            PatrolInfo_RecordResult(SerialMaixCam_GetResultCode());
+            CameraCode = SerialMaixCam_GetResultCode();
+            CameraReady = 1U;
+            PatrolInfo_RecordResult(CameraCode);
         }
 
-        /* 5) OLED 刷新(每 100ms) */
-        if (g_oledRefreshFlag != 0U) {
-            g_oledRefreshFlag = 0U;
+        /* 5) 蓝牙状态上报(每 1s) */
+        Report.taskId = TaskId;
+        Report.currentYawDeg = CurrentYaw;
+        Report.pidTrigIntervalMs = 20U;
+        Report.pidHandleIntervalMs = 20U;
+        Report.pidPendingCount = PidPending;
+        Report.pidTriggerCount = SysMs / 20U;
+        Report.pidOverwriteCount = 0U;
+        (void)SerialReport_Process(&ReportFlag, &Report);
+
+        /* 6) OLED 刷新(每 100ms) */
+        if (OledFlag != 0U) {
+            OledFlag = 0U;
 
             switch (Menu_GetMode()) {
                 case SYS_MENU:
@@ -199,6 +377,8 @@ int main(void)
                 case SYS_FLASH_TEST:
                 case SYS_GRAY_TEST:
                 case SYS_CAMERA_TEST:
+                case SYS_SPEED_LOOP_TEST:
+                case SYS_PWM_TEST:
                 case SYS_OLED_CN_TEST:
                 case SYS_BUZZER_LED_TEST:
                     Menu_Render();
@@ -206,8 +386,8 @@ int main(void)
 
                 case SYS_TASK_RUN:
                     OLED_Clear();
-                    OLED_Printf(0, 0,  OLED_8X16, "Task %u Running", (unsigned int)g_taskId);
-                    OLED_Printf(0, 16, OLED_6X8, "Yaw: %6.1f", (double)g_currentYaw);
+                    OLED_Printf(0, 0,  OLED_8X16, "Task %u Running", (unsigned int)TaskId);
+                    OLED_Printf(0, 16, OLED_6X8, "Yaw: %6.1f", (double)CurrentYaw);
                     OLED_Printf(0, 24, OLED_6X8, "Spd L%+.2f R%+.2f",
                                 (double)encoder_get_left_speed_mps(),
                                 (double)encoder_get_right_speed_mps());
@@ -215,9 +395,6 @@ int main(void)
                                 (double)encoder_get_center_distance_m());
                     OLED_Printf(0, 56, OLED_6X8, "K4:Stop & Back");
                     OLED_Update();
-                    if (g_taskId == 1U) {
-                        SerialReport_Task1Speed();
-                    }
                     break;
             }
         }
@@ -230,49 +407,62 @@ int main(void)
 void TIMER_FOR_1MS_INST_IRQHandler(void)
 {
     DL_TimerA_clearInterruptStatus(TIMER_FOR_1MS_INST, DL_TIMERA_INTERRUPT_ZERO_EVENT);
-    static uint16_t tick10ms  = 0U;
-    static uint16_t tick20ms  = 0U;
-    static uint16_t tick100ms = 0U;
+    static uint16_t Tick10  = 0U;
+    static uint16_t Tick20  = 0U;
+    static uint16_t Tick100 = 0U;
+    static uint16_t Tick1000 = 0U;
 
     /* [1ms] 基础心跳 */
-    g_sysTickMs++;
+    SysMs++;
     Key_Tick();
 
-    tick20ms++;
-    tick100ms++;
-    tick10ms++;
+    Tick20++;
+    Tick100++;
+    Tick1000++;
+    Tick10++;
 
     /* [20ms] 控制事件触发 */
-    if (tick20ms >= 20U) {
-        tick20ms = 0U;
+    if (Tick20 >= 20U) {
+        Tick20 = 0U;
 
-        if (g_speedPidPendingCount < PID_PENDING_COUNT_MAX) {
-            g_speedPidPendingCount++;
+        if (PidPending < PID_PENDING_COUNT_MAX) {
+            PidPending++;
         }
     }
 
     /* [100ms] OLED 刷新事件 */
-    if (tick100ms >= 100U) {
-        tick100ms = 0U;
-        g_oledRefreshFlag = 1U;
+    if (Tick100 >= 100U) {
+        Tick100 = 0U;
+        OledFlag = 1U;
+    }
+
+    /* [1000ms] 蓝牙状态上报事件 */
+    if (Tick1000 >= 1000U) {
+        Tick1000 = 0U;
+        ReportFlag = 1U;
     }
 
     /* [10ms] IMU 更新与 Yaw 解算 */
-    if (tick10ms >= 10U) {
-        tick10ms = 0U;
+    if (Tick10 >= 10U) {
+        Tick10 = 0U;
         Get_Acc_ICM42688();
         Get_Gyro_ICM42688();
         {
-            const float DEG_TO_RAD = 0.01745329252f;
-            float gx = icm42688_gyro_x * DEG_TO_RAD * GYRO_DIR_X;
-            float gy = icm42688_gyro_y * DEG_TO_RAD * GYRO_DIR_Y;
-            float gz = icm42688_gyro_z * DEG_TO_RAD * GYRO_DIR_Z;
-            MahonyAHRSupdateIMU(gx, gy, gz, icm42688_acc_x, icm42688_acc_y, icm42688_acc_z);
-            g_currentYaw = ICM42688_GetYawZeroedDeg();
-            PID_UpdateYawFeedback(g_currentYaw);
+            const float DegToRad = 0.01745329252f;
+            float Gx = icm42688_gyro_x * DegToRad * GyroDirX;
+            float Gy = icm42688_gyro_y * DegToRad * GyroDirY;
+            float Gz = icm42688_gyro_z * DegToRad * GyroDirZ;
+            MahonyAHRSupdateIMU(Gx, Gy, Gz, icm42688_acc_x, icm42688_acc_y, icm42688_acc_z);
+            CurrentYaw = ICM42688_GetYawZeroedDeg();
+            PID_UpdateYawFeedback(CurrentYaw);
         }
     }
 
     /* [1ms] Buzzer/LED non-blocking service */
     BuzzerLed_Tick1ms();
 }
+
+
+
+
+

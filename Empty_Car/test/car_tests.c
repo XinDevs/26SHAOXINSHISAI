@@ -4,6 +4,13 @@
 #include "OLED.h"
 #include "grayscale_sensor.h"
 #include "serial_maixcam.h"
+#include "pid.h"
+#include "dc_motor.h"
+#include "encoder.h"
+#include "main.h"
+
+#define BASE_SPEED_TEST        (0.5f)
+#define PWM_TEST_DUTY          (30)
 
 static const char *s_cameraLastCmdName = "";
 static uint8_t s_cameraLastTxPayload = 0U;
@@ -21,6 +28,58 @@ static void CarTest_CameraSendRequest(uint8_t payload, const char *cmdName)
     } else {
         s_cameraLastTxOk = 0U;
     }
+}
+
+/**
+ * @brief  速度环测试
+ * @details 左右轮以目标速度 0.5m/s 运行，用于测试速度环PID
+ */
+void CarTest_SpeedLoop(void)
+{
+    PID_GoalSpeedPair_Set(BASE_SPEED_TEST, BASE_SPEED_TEST);
+    PID_ExecuteSpeedInnerLoop();
+}
+
+/**
+ * @brief  PWM测试
+ * @details 右电机以固定占空比(30%)输出，用于测试电机驱动
+ */
+void CarTest_PwmTest(void)
+{
+    DCMotor_SetDuty(0, PWM_TEST_DUTY);
+}
+
+void CarTest_RenderSpeedLoop(void)
+{
+    OLED_Clear();
+    OLED_Printf(0, 0,  OLED_8X16, "Speed Loop");
+    OLED_Printf(0, 16, OLED_6X8, "Target L/R %.2fm/s", (double)BASE_SPEED_TEST);
+    OLED_Printf(0, 24, OLED_6X8, "Spd L%+.2f R%+.2f",
+                (double)encoder_get_left_speed_mps(),
+                (double)encoder_get_right_speed_mps());
+    OLED_Printf(0, 32, OLED_6X8, "Dist %.3f m",
+                (double)encoder_get_center_distance_m());
+    OLED_Printf(0, 56, OLED_6X8, "K4:Stop & Back");
+    OLED_Update();
+}
+
+void CarTest_RenderPwm(void)
+{
+    DCMotor_Status_t status;
+
+    DCMotor_GetStatus(&status);
+
+    OLED_Clear();
+    OLED_Printf(0, 0,  OLED_8X16, "PWM Test");
+    OLED_Printf(0, 16, OLED_6X8, "Cmd L0%% R%d%%", PWM_TEST_DUTY);
+    OLED_Printf(0, 24, OLED_6X8, "Duty L%+3d%% R%+3d%%",
+                status.left_duty_percent,
+                status.right_duty_percent);
+    OLED_Printf(0, 32, OLED_6X8, "Spd L%+.2f R%+.2f",
+                (double)encoder_get_left_speed_mps(),
+                (double)encoder_get_right_speed_mps());
+    OLED_Printf(0, 56, OLED_6X8, "K4:Stop & Back");
+    OLED_Update();
 }
 
 void CarTest_FlashRun(CarTestState_t *state)

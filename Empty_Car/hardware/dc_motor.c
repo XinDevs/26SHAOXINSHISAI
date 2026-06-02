@@ -1,8 +1,8 @@
-/**
+﻿/**
  * @file    dc_motor.c
- * @brief   双路直流电机PWM驱动
- * @details 基于MSPM0定时器PWM输出，控制左右轮直流电机的占空比与方向。
- *          支持正转/反转/停止，可配置左右轮方向反相开关以适配实际接线。
+ * @brief   鍙岃矾鐩存祦鐢垫満PWM椹卞姩
+ * @details 鍩轰簬MSPM0瀹氭椂鍣≒WM杈撳嚭锛屾帶鍒跺乏鍙宠疆鐩存祦鐢垫満鐨勫崰绌烘瘮涓庢柟鍚戙€?
+ *          鏀寔姝ｈ浆/鍙嶈浆/鍋滄锛屽彲閰嶇疆宸﹀彸杞柟鍚戝弽鐩稿紑鍏充互閫傞厤瀹為檯鎺ョ嚎銆?
  */
 
 #include "dc_motor.h"
@@ -10,9 +10,9 @@
 #include "ti_msp_dl_config.h"
 
 /*
- * 方向反相开关（按实际接线调整）
- * 0: 正常
- * 1: 该侧前进/后退逻辑互换
+ * 鏂瑰悜鍙嶇浉寮€鍏筹紙鎸夊疄闄呮帴绾胯皟鏁达級
+ * 0: 姝ｅ父
+ * 1: 璇ヤ晶鍓嶈繘/鍚庨€€閫昏緫浜掓崲
  */
 #ifndef DCMOTOR_LEFT_REVERSE
 #define DCMOTOR_LEFT_REVERSE   (1)
@@ -31,9 +31,9 @@ static DCMotor_Status_t s_motor = {
 };
 
 /**
- * @brief  占空比限幅到 [-100, 100]
- * @param  duty 输入占空比百分比
- * @retval 限幅后的占空比
+ * @brief  鍗犵┖姣旈檺骞呭埌 [-100, 100]
+ * @param  duty 杈撳叆鍗犵┖姣旂櫨鍒嗘瘮
+ * @retval 闄愬箙鍚庣殑鍗犵┖姣?
  */
 static int16_t DCMotor_ClampDuty(int16_t duty)
 {
@@ -43,10 +43,10 @@ static int16_t DCMotor_ClampDuty(int16_t duty)
 }
 
 /**
- * @brief  按反相配置映射电机方向
- * @param  dir 原始方向
- * @param  reverse 反相开关(0:不反相, 1:反相)
- * @retval 映射后的实际方向
+ * @brief  鎸夊弽鐩搁厤缃槧灏勭數鏈烘柟鍚?
+ * @param  dir 鍘熷鏂瑰悜
+ * @param  reverse 鍙嶇浉寮€鍏?0:涓嶅弽鐩? 1:鍙嶇浉)
+ * @retval 鏄犲皠鍚庣殑瀹為檯鏂瑰悜
  */
 static DCMotor_Direction_t DCMotor_ApplyReverse(
     DCMotor_Direction_t dir, uint8_t reverse)
@@ -64,8 +64,8 @@ static DCMotor_Direction_t DCMotor_ApplyReverse(
 }
 
 /**
- * @brief  设置左电机方向引脚
- * @param  dir 目标方向
+ * @brief  璁剧疆宸︾數鏈烘柟鍚戝紩鑴?
+ * @param  dir 鐩爣鏂瑰悜
  */
 static void DCMotor_SetLeftDirection(DCMotor_Direction_t dir)
 {
@@ -90,8 +90,8 @@ static void DCMotor_SetLeftDirection(DCMotor_Direction_t dir)
 }
 
 /**
- * @brief  设置右电机方向引脚
- * @param  dir 目标方向
+ * @brief  璁剧疆鍙崇數鏈烘柟鍚戝紩鑴?
+ * @param  dir 鐩爣鏂瑰悜
  */
 static void DCMotor_SetRightDirection(DCMotor_Direction_t dir)
 {
@@ -116,9 +116,9 @@ static void DCMotor_SetRightDirection(DCMotor_Direction_t dir)
 }
 
 /**
- * @brief  设置指定 PWM 通道占空比绝对值
- * @param  ccIndex 通道索引
- * @param  dutyAbs 占空比绝对值(0~100)
+ * @brief  璁剧疆鎸囧畾 PWM 閫氶亾鍗犵┖姣旂粷瀵瑰€?
+ * @param  ccIndex 閫氶亾绱㈠紩
+ * @param  dutyAbs 鍗犵┖姣旂粷瀵瑰€?0~100)
  */
 static void DCMotor_SetPwmAbs(DL_TIMER_CC_INDEX ccIndex, uint16_t dutyAbs)
 {
@@ -139,8 +139,8 @@ static void DCMotor_SetPwmAbs(DL_TIMER_CC_INDEX ccIndex, uint16_t dutyAbs)
 }
 
 /**
- * @brief  设置左电机 PWM 占空比绝对值
- * @param  dutyAbs 占空比绝对值(0~100)
+ * @brief  璁剧疆宸︾數鏈?PWM 鍗犵┖姣旂粷瀵瑰€?
+ * @param  dutyAbs 鍗犵┖姣旂粷瀵瑰€?0~100)
  */
 static void DCMotor_SetLeftPwmAbs(uint16_t dutyAbs)
 {
@@ -148,8 +148,8 @@ static void DCMotor_SetLeftPwmAbs(uint16_t dutyAbs)
 }
 
 /**
- * @brief  设置右电机 PWM 占空比绝对值
- * @param  dutyAbs 占空比绝对值(0~100)
+ * @brief  璁剧疆鍙崇數鏈?PWM 鍗犵┖姣旂粷瀵瑰€?
+ * @param  dutyAbs 鍗犵┖姣旂粷瀵瑰€?0~100)
  */
 static void DCMotor_SetRightPwmAbs(uint16_t dutyAbs)
 {
@@ -157,15 +157,15 @@ static void DCMotor_SetRightPwmAbs(uint16_t dutyAbs)
 }
 
 /**
- * @brief  直流电机驱动初始化
- * @note   初始化 PWM 并置零输出。
+ * @brief  鐩存祦鐢垫満椹卞姩鍒濆鍖?
+ * @note   鍒濆鍖?PWM 骞剁疆闆惰緭鍑恒€?
  */
 void DCMotor_Init(void)
 {
-    /* 由 SysConfig 生成的电机 PWM 初始化 */
+    /* 鐢?SysConfig 鐢熸垚鐨勭數鏈?PWM 鍒濆鍖?*/
     SYSCFG_DL_DC_Motor_PWM_init();
 
-    /* 确保计数器运行，PWM输出生效 */
+    /* 纭繚璁℃暟鍣ㄨ繍琛岋紝PWM杈撳嚭鐢熸晥 */
     DL_Timer_startCounter(DC_Motor_PWM_INST);
 
     s_motor.enabled = 1U;
@@ -173,8 +173,8 @@ void DCMotor_Init(void)
 }
 
 /**
- * @brief  使能或关闭电机输出
- * @param  enable 0: 关闭, 非0: 使能
+ * @brief  浣胯兘鎴栧叧闂數鏈鸿緭鍑?
+ * @param  enable 0: 鍏抽棴, 闈?: 浣胯兘
  */
 void DCMotor_Enable(uint8_t enable)
 {
@@ -192,10 +192,10 @@ void DCMotor_Enable(uint8_t enable)
 }
 
 /**
- * @brief  设置左右电机占空比
- * @param  left_duty_percent 左轮占空比(-100~100)
- * @param  right_duty_percent 右轮占空比(-100~100)
- * @note   正值前进, 负值后退, 0 为停止。
+ * @brief  璁剧疆宸﹀彸鐢垫満鍗犵┖姣?
+ * @param  left_duty_percent 宸﹁疆鍗犵┖姣?-100~100)
+ * @param  right_duty_percent 鍙宠疆鍗犵┖姣?-100~100)
+ * @note   姝ｅ€煎墠杩? 璐熷€煎悗閫€, 0 涓哄仠姝€?
  */
 void DCMotor_SetDuty(int16_t left_duty_percent, int16_t right_duty_percent)
 {
@@ -256,16 +256,38 @@ void DCMotor_SetDuty(int16_t left_duty_percent, int16_t right_duty_percent)
 }
 
 /**
- * @brief  停止双电机输出
+ * @brief  鍋滄鍙岀數鏈鸿緭鍑?
  */
 void DCMotor_Stop(void)
 {
     DCMotor_SetDuty(0, 0);
 }
+/**
+ * @brief  刹车双电机，短接 H 桥输出以减小惯性滑行
+ */
+void DCMotor_Brake(void)
+{
+    s_motor.left_duty_percent = 0;
+    s_motor.right_duty_percent = 0;
+    s_motor.left_dir = DCMOTOR_DIR_STOP;
+    s_motor.right_dir = DCMOTOR_DIR_STOP;
+
+    if (!s_motor.enabled) {
+        DCMotor_SetDuty(0, 0);
+        return;
+    }
+
+    DL_GPIO_setPins(DC_Motor_BIN1_PORT, DC_Motor_BIN1_PIN);
+    DL_GPIO_setPins(DC_Motor_BIN2_PORT, DC_Motor_BIN2_PIN);
+    DL_GPIO_setPins(DC_Motor_AIN1_PORT, DC_Motor_AIN1_PIN);
+    DL_GPIO_setPins(DC_Motor_AIN2_PORT, DC_Motor_AIN2_PIN);
+    DCMotor_SetLeftPwmAbs(100U);
+    DCMotor_SetRightPwmAbs(100U);
+}
 
 /**
- * @brief  获取电机状态快照
- * @param  status 输出状态结构体指针
+ * @brief  鑾峰彇鐢垫満鐘舵€佸揩鐓?
+ * @param  status 杈撳嚭鐘舵€佺粨鏋勪綋鎸囬拡
  */
 void DCMotor_GetStatus(DCMotor_Status_t *status)
 {
@@ -276,9 +298,9 @@ void DCMotor_GetStatus(DCMotor_Status_t *status)
 }
 
 /**
- * @brief  将方向枚举转为字符串
- * @param  dir 方向枚举
- * @retval 方向字符串(FWD/BWD/STP)
+ * @brief  灏嗘柟鍚戞灇涓捐浆涓哄瓧绗︿覆
+ * @param  dir 鏂瑰悜鏋氫妇
+ * @retval 鏂瑰悜瀛楃涓?FWD/BWD/STP)
  */
 const char *DCMotor_DirectionString(DCMotor_Direction_t dir)
 {
@@ -290,3 +312,5 @@ const char *DCMotor_DirectionString(DCMotor_Direction_t dir)
         default:                   return "STP";
     }
 }
+
+

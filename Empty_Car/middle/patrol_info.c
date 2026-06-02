@@ -40,6 +40,8 @@
 
 /** @brief 巡检信息快照（运行时数据） */
 static PatrolInfoSnapshot_t s_info;
+static PatrolInfoSnapshot_t s_lastValidInfo;
+static uint8_t s_lastValidInfoReady;
 
 /** @brief 巡检开始时间戳（毫秒） */
 static uint32_t s_startMs;
@@ -213,6 +215,8 @@ void PatrolInfo_Init(void)
     memcpy(s_info.results, &data[10], PATROL_INFO_MAX_RESULTS);
     s_info.running = 0U;
     s_info.storageValid = 1U;
+    s_lastValidInfo = s_info;
+    s_lastValidInfoReady = 1U;
 }
 
 /**
@@ -221,6 +225,11 @@ void PatrolInfo_Init(void)
  */
 void PatrolInfo_Start(uint32_t nowMs)
 {
+    if ((s_info.storageValid != 0U) && (s_info.running == 0U)) {
+        s_lastValidInfo = s_info;
+        s_lastValidInfoReady = 1U;
+    }
+
     PatrolInfo_ResetRuntime();
     s_startMs = nowMs;
     s_info.running = 1U;
@@ -276,6 +285,19 @@ void PatrolInfo_Finish(uint32_t nowMs)
 
     /* 保存到Flash */
     PatrolInfo_SaveToFlash();
+    if (s_info.storageValid != 0U) {
+        s_lastValidInfo = s_info;
+        s_lastValidInfoReady = 1U;
+    }
+}
+
+void PatrolInfo_Cancel(void)
+{
+    if (s_lastValidInfoReady != 0U) {
+        s_info = s_lastValidInfo;
+    } else {
+        PatrolInfo_ResetRuntime();
+    }
 }
 
 /**

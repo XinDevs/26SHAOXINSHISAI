@@ -41,6 +41,8 @@ typedef enum {
     SYS_FLASH_TEST,    /* Flash 测试页面 */
     SYS_GRAY_TEST,     /* 灰度测试页面 */
     SYS_CAMERA_TEST,   /* 摄像头测试页面 */
+    SYS_SPEED_LOOP_TEST, /* 速度环测试页面 */
+    SYS_PWM_TEST,      /* PWM 测试页面 */
     SYS_OLED_CN_TEST,  /* OLED 中文测试页面 */
     SYS_BUZZER_LED_TEST /* 蜂鸣器和 LED 测试页面 */
 } SystemMode_t;
@@ -95,6 +97,16 @@ void Menu_SetMode(SystemMode_t mode);
  * @brief  设置 PID 编辑子页面
  */
 void Menu_SetPIDEditPage(PIDEditPage_t page);
+
+/**
+ * @brief  停止任务（滑行停止）并返回菜单
+ */
+void Main_StopTaskAndReturnMenu(void);
+
+/**
+ * @brief  停止任务（主动刹车）并返回菜单
+ */
+void Main_BrakeTaskAndReturnMenu(void);
 
 #ifdef __cplusplus
 }

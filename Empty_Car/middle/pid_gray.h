@@ -9,6 +9,12 @@
 #include <stdint.h>
 #include "grayscale_sensor.h"
 
+/* ===== 循迹传感器范围 =====
+ * 循迹只用中间12路(sensor[2]-sensor[13])，
+ * 最左2路和最右2路仅在路口判断时使用。
+ */
+#define GRAY_LINE_START  2U
+#define GRAY_LINE_END    13U
 /**
  * @brief  灰度巡线环参数初始化
  */
@@ -27,6 +33,14 @@ float PID_GetGrayscaleWeightedPosition(void);
  * @note   带防抖：连续3次检测确认，连续5次未检测取消
  */
 uint8_t PID_Gray_IsYJunction(void);
+
+void PID_Gray_ResetYJunctionState(void);
+
+/**
+ * @brief  检测起终点线（起终点线特征相同）
+ * @retval 1: 检测到横线, 0: 未检测到
+ */
+uint8_t PID_Gray_IsStartFinishLine(void);
 /**
  * @brief  灰度环单步计算
  */
@@ -39,7 +53,7 @@ float PID_Calculate_GrayscaleSpeedDiff(float targetPosition, float speedDiffScal
  * @brief  灰度外环 + 速度内环级联执行
  */
 void PID_ExecuteGrayCascade(float baseSpeedMps, float targetPosition,
-                            float speedDiffScale, float yawForReportDeg);
+                            float speedDiffScale);
 void PID_SetGrayscaleWeights(const float weights[GW_GRAY_CHANNEL_COUNT]);
 void PID_GetGrayscaleWeights(float weightsOut[GW_GRAY_CHANNEL_COUNT]);
 void PID_SetGrayscaleLeftWeights(const float weights[GW_GRAY_MODULE_CHANNEL_COUNT]);

@@ -597,6 +597,20 @@ void OLED_ShowString(int16_t X, int16_t Y, const char *String, uint8_t FontSize)
 		{
 			/*遍历整个字模库，从字模库中寻找此字符的数据*/
 			/*如果找到最后一个字符（定义为空字符串），则表示字符未在字模库定义，停止寻找*/
+			if (FontSize == OLED_12X12)
+			{
+				for (pIndex = 0; strcmp(OLED_CF12x12[pIndex].Index, "") != 0; pIndex ++)
+				{
+					if (strcmp(OLED_CF12x12[pIndex].Index, SingleChar) == 0)
+					{
+						break;
+					}
+				}
+				OLED_ShowImage(X + XOffset, Y, 12, 12, OLED_CF12x12[pIndex].Data);
+				XOffset += 12;
+			}
+			else
+			{
 			for (pIndex = 0; strcmp(OLED_CF16x16[pIndex].Index, "") != 0; pIndex ++)
 			{
 				/*找到匹配的字符*/
@@ -616,6 +630,7 @@ void OLED_ShowString(int16_t X, int16_t Y, const char *String, uint8_t FontSize)
 				/*空间不足，此位置显示'?'*/
 				OLED_ShowChar(X + XOffset, Y, '?', OLED_6X8);
 				XOffset += OLED_6X8;
+			}
 			}
 		}
 	}
