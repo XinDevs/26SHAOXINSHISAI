@@ -430,9 +430,9 @@ int main(void)
                          * - 超时同样随机转向
                          */
                         if (g_grayParamProfile != 1U) {
-                            PID_Grayscale_Init(1.0f, 0.0f, 0.0f);
-                            PID_SetGrayscaleLeftWeights6(2.0f, 1.8f, 1.5f,
-                                                         0.9f, 0.8f, 0.3f);
+                            PID_Grayscale_Init(1.8f, 0.0f, 0.0f);
+                            PID_SetGrayscaleLeftWeights6(3.5f, 3.0f, 2.5f,
+                                                         1.1f, 0.9f, 0.5f);
                             PID_Reset(GRAYSCALE);
                             g_grayParamProfile = 1U;
                         }
