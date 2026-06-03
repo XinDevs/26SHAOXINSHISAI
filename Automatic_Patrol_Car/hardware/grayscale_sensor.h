@@ -40,6 +40,7 @@ extern "C" {
 #define GW_GRAY_ERROR                 0x01
 #define GW_GRAY_PING_FAIL             0x02
 #define GW_GRAY_I2C_ERROR             0x03
+#define GW_GRAY_BUSY                  0x04
 
 /* 全局数组：存储8路灰度状态 */
 #define GW_GRAY_CHANNEL_COUNT         16U
@@ -127,8 +128,14 @@ unsigned char IIC_Get_Firmware_Version(uint8_t addr);
  * @param  data 8bit 原始位图
  */
 void grayscale_byte_to_sensor_array(uint8_t data);
+/* 将左右两模块各8bit数字量合并展开到16路sensor数组 */
 void grayscale_dual_byte_to_sensor_array(uint8_t leftData, uint8_t rightData);
+/* 同步读取左右两模块数字量并更新sensor数组（阻塞） */
 unsigned char grayscale_update_sensor_array(void);
+/* 异步读取灰度传感器，按指定间隔分步完成左右模块通信 */
+unsigned char grayscale_update_sensor_array_async(uint32_t nowMs);
+/* 获取异步读取状态：0=空闲，1=进行中 */
+unsigned char grayscale_get_async_status(void);
 /**
  * @brief  探测指定地址的灰度模块是否在线
  * @param  addr 从机地址

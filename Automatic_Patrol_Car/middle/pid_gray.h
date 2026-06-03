@@ -53,7 +53,7 @@ float PID_GetGrayscaleWeightedPosition(void);
 /**
  * @brief  检测Y型岔路口
  * @retval 1: 检测到稳定的Y型岔路口, 0: 未检测到
- * @note   带防抖：连续2次检测确认，连续5次未检测取消
+ * @note   带防抖：左右分支同时检测到线、中间7~8路无线时1次确认，连续5次未检测取消
  */
 uint8_t PID_Gray_IsYJunction(void);
 
@@ -63,8 +63,14 @@ uint8_t PID_Gray_IsYJunction(void);
 void PID_Gray_ResetYJunctionState(void);
 
 /**
+ * @brief  检测任务三/任务五使用的中间宽线路口
+ * @retval 1: sensor[6]~sensor[9] 全部检测到线，且 sensor[5]/sensor[10] 至少一路检测到线
+ */
+uint8_t PID_Gray_IsCenterYJunction(void);
+
+/**
  * @brief  检测起终点线（起终点线特征相同）
- * @retval 1: 检测到横线, 0: 未检测到
+ * @retval 1: 激活数量和覆盖跨度符合横线特征, 0: 未检测到
  */
 uint8_t PID_Gray_IsStartFinishLine(void);
 /**

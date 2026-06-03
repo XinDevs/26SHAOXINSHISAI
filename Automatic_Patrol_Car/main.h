@@ -30,16 +30,16 @@ extern "C" {
 #define TURN_ANGLE_DEG         (90.0f)
 
 /* 路口转向外侧轮目标速度，单位 m/s。 */
-#define SPIN_TO_LINE_SPEED_MPS (0.3f)
-/* 转弯差速比例：内侧轮速度 = 外侧轮速度 * 该比例。 */
-#define TURN_INNER_SPEED_RATIO (0.2f)
+#define TURN_OUTER_SPEED       (0.3f)
+/* 路口转向内侧轮目标速度，单位 m/s。 */
+#define TURN_INNER_SPEED       (0.06f)
 /* 转弯开始后延迟检测回线的时间，单位 ms。 */
 #define TURN_LINE_DETECT_DELAY_MS (200U)
 /* 原地找线/转向阶段延时，单位 ms。 */
 #define SPIN_LINE_DELAY_MS     (500U)
 
 /* 摄像头判向等待超时时间(ms) */
-#define CAMERA_TURN_TIMEOUT_MS (500U)
+#define CAMERA_TURN_TIMEOUT_MS (300U)
 /* 当前航向角，由 IMU 更新，单位度。 */
 extern volatile float CurrentYaw;
 /* 系统毫秒计时。 */

@@ -19,8 +19,8 @@ static float gGrayscaleLeftWeights[GW_GRAY_MODULE_CHANNEL_COUNT] = {
     0.3f,  0.2f,  0.08f,  0.05f
 };
 
-static uint8_t g_yJunctionHitCount = 0U;    /* Y岔路口连续检测到计数 */
 static uint8_t g_yJunctionMissCount = 0U;   /* Y岔路口连续未检测到计数 */
+static uint8_t g_yJunctionHitCount = 0U;    /* Y岔路口连续检测到计数 */
 static uint8_t g_yJunctionStable = 0U;      /* 稳定的Y岔路口状态(0/1) */
 
 /**
@@ -153,18 +153,85 @@ float PID_GetGrayscaleWeightedPosition(void)
     return last_position;
 }
 
+// /**
+//  * @brief  检测Y型岔路口
+//  * @details 通过分析16路灰度传感器的激活状态判断是否处于Y型岔路口。
+//  *          判断逻辑：
+//  *          1. 总激活数>=5 且 左右分支>=2
+//  *          2. 中间4路激活数不超过阈值(当前阈值为4)
+//  *
+//  *          防抖逻辑：
+//  *          - 连续检测到2次才确认为Y岔路口（防止误触发）
+//  *          - 连续5次未检测到才取消Y岔路口状态（防止漏检）
+//  *
+//  * @retval 1: 检测到稳定的Y型岔路口
+//  * @retval 0: 未检测到Y型岔路口
+//  *
+//  * @note   传感器分布：
+//  *         - [2-5]  : 左分支区域
+//  *         - [7-8]  : 中间区域
+//  *         - [10-13]: 右分支区域
+//  */
+// uint8_t PID_Gray_IsYJunction(void)
+// {
+//     uint8_t totalCount;        /* 总激活传感器数量 */
+//     uint8_t centerCount;       /* 中间区域激活数量 */
+//     uint8_t leftBranchCount;   /* 左分支区域激活数量 */
+//     uint8_t rightBranchCount;  /* 右分支区域激活数量 */
+//     uint8_t rawYJunction;      /* 原始判断结果（未防抖） */
+
+//     /* 统计各区域激活的传感器数量 */
+//     totalCount = PID_Gray_CountActive(0U, 15U);   /* 全部16路 */
+//     centerCount = PID_Gray_CountActive(7U, 8U);    /* 中间2路 (7、8号) */
+//     leftBranchCount = PID_Gray_CountActive(2U, 5U);  /* 左边4路 (2~5号) */
+//     rightBranchCount = PID_Gray_CountActive(10U, 13U); /* 右边4路 (10~13号) */
+
+//     /* 判断是否为Y型岔路口：
+//      * 条件: 总数>=4 且 左分支>=2 且 右分支>=2 且 中间2路激活数不超过阈值。
+//      * 说明: Y岔路口时左右分支同时有线，因此左右两侧命中数量是主要判据。 */
+//     rawYJunction =
+//         ((totalCount >= 4U) &&
+//          (leftBranchCount >= 2U) &&
+//          (rightBranchCount >= 2U) &&
+//          (centerCount <= 2U)) ? 1U : 0U;
+
+//     /* 防抖处理 */
+//     if (rawYJunction != 0U) {
+//         /* 检测到Y岔路口，累加命中计数 */
+//         if (g_yJunctionHitCount < 3U) {
+//             g_yJunctionHitCount++;
+//         }
+//         g_yJunctionMissCount = 0U;  /* 重置未命中计数 */
+//         /* 连续2次检测到才确认 */
+//         if (g_yJunctionHitCount >= 2U) {
+//             g_yJunctionStable = 1U;
+//         }
+//     } else {
+//         /* 未检测到Y岔路口 */
+//         g_yJunctionHitCount = 0U;   /* 重置命中计数 */
+//         if (g_yJunctionMissCount < 5U) {
+//             g_yJunctionMissCount++;
+//         }
+//         /* 连续5次未检测到才取消 */
+//         if (g_yJunctionMissCount >= 5U) {
+//             g_yJunctionStable = 0U;
+//         }
+//     }
+
+//     return g_yJunctionStable;
+// }
 /**
  * @brief  检测Y型岔路口
  * @details 通过分析16路灰度传感器的激活状态判断是否处于Y型岔路口。
  *          判断逻辑：
- *          1. 总激活数>=5 且 左右分支>=2
- *          2. 中间4路激活数不超过阈值(当前阈值为4)
+ *          1. 总激活数>=3 且 左分支>=1 且 右分支>=1
+ *          2. 中间2路(sensor[7-8])均未激活
  *
  *          防抖逻辑：
- *          - 连续检测到2次才确认为Y岔路口（防止误触发）
- *          - 连续5次未检测到才取消Y岔路口状态（防止漏检）
+ *          - 检测到1次即确认
+ *          - 连续5次未检测到才取消（防止转弯过程中误取消）
  *
- * @retval 1: 检测到稳定的Y型岔路口
+ * @retval 1: 检测到Y型岔路口
  * @retval 0: 未检测到Y型岔路口
  *
  * @note   传感器分布：
@@ -187,32 +254,24 @@ uint8_t PID_Gray_IsYJunction(void)
     rightBranchCount = PID_Gray_CountActive(10U, 13U); /* 右边4路 (10~13号) */
 
     /* 判断是否为Y型岔路口：
-     * 条件: 总数>=4 且 左分支>=2 且 右分支>=2 且 中间2路激活数不超过阈值。
-     * 说明: Y岔路口时左右分支同时有线，因此左右两侧命中数量是主要判据。 */
+     * 条件: 总数>=3 且 左分支>=1 且 右分支>=1 且 中间2路无线。
+     * 说明: Y岔路口时左右分支同时有线，中间无线说明车正对岔口。 */
     rawYJunction =
-        ((totalCount >= 4U) &&
-         (leftBranchCount >= 2U) &&
-         (rightBranchCount >= 2U) &&
-         (centerCount <= 2U)) ? 1U : 0U;
+        ((totalCount >= 3U) &&
+         (leftBranchCount >= 1U) &&
+         (rightBranchCount >= 1U) &&
+         (centerCount == 0U)) ? 1U : 0U;
 
-    /* 防抖处理 */
+    /* 防抖：检测到1次即确认，未检测到连续5次才取消 */
     if (rawYJunction != 0U) {
-        /* 检测到Y岔路口，累加命中计数 */
-        if (g_yJunctionHitCount < 3U) {
-            g_yJunctionHitCount++;
-        }
-        g_yJunctionMissCount = 0U;  /* 重置未命中计数 */
-        /* 连续2次检测到才确认 */
-        if (g_yJunctionHitCount >= 2U) {
-            g_yJunctionStable = 1U;
-        }
+        g_yJunctionHitCount = 0U;
+        g_yJunctionMissCount = 0U;
+        g_yJunctionStable = 1U;
     } else {
-        /* 未检测到Y岔路口 */
-        g_yJunctionHitCount = 0U;   /* 重置命中计数 */
+        g_yJunctionHitCount = 0U;
         if (g_yJunctionMissCount < 5U) {
             g_yJunctionMissCount++;
         }
-        /* 连续5次未检测到才取消 */
         if (g_yJunctionMissCount >= 5U) {
             g_yJunctionStable = 0U;
         }
@@ -220,27 +279,43 @@ uint8_t PID_Gray_IsYJunction(void)
 
     return g_yJunctionStable;
 }
-
 /**
  * @brief  重置Y岔路口检测状态
  */
 void PID_Gray_ResetYJunctionState(void)
 {
-    g_yJunctionHitCount = 0U;
     g_yJunctionMissCount = 0U;
+    g_yJunctionHitCount = 0U;
     g_yJunctionStable = 0U;
 }
 
 /**
+ * @brief  检测中间全白路口
+ * @details sensor[6]~sensor[9] 四路必须全部未检测到黑线（中间全白），
+ *          且 sensor[5] 或 sensor[10] 至少一路未检测到黑线时，
+ *          判断为路口。用于循迹测试任务的停车判断。
+ */
+uint8_t PID_Gray_IsCenterYJunction(void)
+{
+    uint8_t centerCount;
+    uint8_t edgeCount;
+
+    centerCount = PID_Gray_CountActive(6U, 9U);     /* 中间4路 */
+    edgeCount = (uint8_t)(PID_Gray_CountActive(5U, 5U) +
+                          PID_Gray_CountActive(10U, 10U)); /* sensor[5]和[10] */
+
+    return ((centerCount == 0U) && (edgeCount < 2U)) ? 1U : 0U;
+}
+
+/**
  * @brief  检测起终点线（起终点线特征相同）
- * @details 当 16 路灰度中检测到线的传感器数量 >= 12 时，判断为横线。
+ * @details 当 16 路灰度中检测到黑线的传感器数量 >= 11 时，判断为横线。
  * @retval 1: 检测到横线
  * @retval 0: 未检测到横线
  */
 uint8_t PID_Gray_IsStartFinishLine(void)
 {
-    /* 起终点线通常横跨大部分灰度探头，使用总激活数作为判据。 */
-    return (PID_Gray_CountActive(0U, 15U) >= 12U) ? 1U : 0U;
+    return (PID_Gray_CountActive(0U, 15U) >= 11U) ? 1U : 0U;
 }
 
 /**

@@ -40,24 +40,22 @@ uint8_t Turn_IsRunning(void)
 /**
  * @brief  启动转弯（速度环方式）
  * @param  turnLeft 1:左转, 0:右转
- * @param  speedMps 转弯轮目标速度 (m/s)
+ * @param  outerSpeed 外侧轮目标速度 (m/s)
+ * @param  innerSpeed 内侧轮目标速度 (m/s)
  * @param  nowMs    当前时间戳 (毫秒)
- * @details 左转时：左轮目标速度 0，右轮正转
- *          右转时：左轮正转，右轮目标速度 0
- *          通过 PID_GoalSpeedLeft/Right_InitEx 的方向参数控制。
+ * @details 左转时：左轮=内侧, 右轮=外侧
+ *          右转时：左轮=外侧, 右轮=内侧
  */
-void Turn_Start(uint8_t turnLeft, float speedMps, uint32_t nowMs)
+void Turn_Start(uint8_t turnLeft, float outerSpeed, float innerSpeed, uint32_t nowMs)
 {
-    float innerSpeedMps = speedMps * TURN_INNER_SPEED_RATIO;
-
     s_turnActive = 1U;
     s_turnStartMs = nowMs;
     s_turnLeft = (turnLeft != 0U) ? 1U : 0U;
 
     if (turnLeft != 0U) {
-        PID_GoalSpeedPair_Set(innerSpeedMps, speedMps);
+        PID_GoalSpeedPair_Set(innerSpeed, outerSpeed);
     } else {
-        PID_GoalSpeedPair_Set(speedMps, innerSpeedMps);
+        PID_GoalSpeedPair_Set(outerSpeed, innerSpeed);
     }
 }
 

@@ -15,6 +15,23 @@ extern "C" {
 
 /* ===== 菜单项类型 ===== */
 typedef enum {
+    SYS_MENU = 0,      /* ?????? */
+    SYS_TASK_RUN,      /* ?????? */
+    SYS_PATROL_INFO,   /* ?????? */
+    SYS_MONITOR,       /* ?????? */
+    SYS_PID_EDIT,      /* PID ???? */
+    SYS_FLASH_TEST,    /* Flash ???? */
+    SYS_GRAY_TEST,     /* ????????? */
+    SYS_GRAY_ANALOG_TEST, /* ????????? */
+    SYS_CAMERA_TEST,   /* ??????? */
+    SYS_SPEED_LOOP_TEST, /* ??????? */
+    SYS_PWM_TEST,      /* PWM ???? */
+    SYS_OLED_CN_TEST,  /* OLED ?????? */
+    SYS_BUZZER_LED_TEST /* ???? LED ???? */
+} SystemMode_t;
+
+/* ===== 菜单项类型 ===== */
+typedef enum {
     MENU_NODE = 0,  /* 包含子菜单的节点 */
     MENU_LEAF       /* 可执行动作的叶子项 */
 } MenuItemType_t;
@@ -30,22 +47,6 @@ typedef struct {
     uint8_t          childStart;    /* NODE: 子菜单在数组中的起始索引 */
     uint8_t          childCount;    /* NODE: 子菜单项数量 */
 } MenuItem_t;
-
-/* ===== 系统运行模式 ===== */
-typedef enum {
-    SYS_MENU = 0,      /* 菜单导航模式 */
-    SYS_TASK_RUN,      /* 任务运行模式 */
-    SYS_PATROL_INFO,   /* 巡检信息页面 */
-    SYS_MONITOR,       /* 实时监测模式 */
-    SYS_PID_EDIT,      /* PID 调参模式 */
-    SYS_FLASH_TEST,    /* Flash 测试页面 */
-    SYS_GRAY_TEST,     /* 灰度测试页面 */
-    SYS_CAMERA_TEST,   /* 摄像头测试页面 */
-    SYS_SPEED_LOOP_TEST, /* 速度环测试页面 */
-    SYS_PWM_TEST,      /* PWM 测试页面 */
-    SYS_OLED_CN_TEST,  /* OLED 中文测试页面 */
-    SYS_BUZZER_LED_TEST /* 蜂鸣器和 LED 测试页面 */
-} SystemMode_t;
 
 /* ===== PID 编辑页面 ===== */
 typedef enum {

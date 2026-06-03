@@ -17,8 +17,8 @@ void Turn_Reset(void);
 /* 查询转弯是否进行中 */
 uint8_t Turn_IsRunning(void);
 
-/* 启动转弯: turnLeft=1左转, speedMps目标速度, nowMs当前时间 */
-void Turn_Start(uint8_t turnLeft, float speedMps, uint32_t nowMs);
+/* 启动转弯: turnLeft=1左转, outerSpeed外侧轮速度(m/s), innerSpeed内侧轮速度(m/s), nowMs当前时间 */
+void Turn_Start(uint8_t turnLeft, float outerSpeed, float innerSpeed, uint32_t nowMs);
 
 /* 执行转弯速度环(20ms周期调用) */
 void Turn_Run(void);
