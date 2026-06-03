@@ -28,13 +28,13 @@
 #define PATROL_INFO_MAGIC           0x50494E46UL
 
 /** @brief 数据格式版本号 */
-#define PATROL_INFO_VERSION         1U
+#define PATROL_INFO_VERSION         2U
 
 /** @brief 存储总大小（字节） */
-#define PATROL_INFO_STORAGE_SIZE    18U
+#define PATROL_INFO_STORAGE_SIZE    22U
 
 /** @brief 校验和在数据中的偏移量 */
-#define PATROL_INFO_CHECKSUM_OFFSET 16U
+#define PATROL_INFO_CHECKSUM_OFFSET 20U
 
 /* ===== 内部状态变量 ===== */
 
@@ -132,8 +132,8 @@ static void PatrolInfo_SaveToFlash(void)
 
     /* 计算并写入校验和 */
     checksum = PatrolInfo_Checksum(data, PATROL_INFO_CHECKSUM_OFFSET);
-    data[16] = (uint8_t)(checksum & 0xFFU);
-    data[17] = (uint8_t)((checksum >> 8) & 0xFFU);
+    data[20] = (uint8_t)(checksum & 0xFFU);
+    data[21] = (uint8_t)((checksum >> 8) & 0xFFU);
 
     /* 擦除Flash扇区 */
     eraseRet = Flash_EraseSector(PATROL_INFO_FLASH_ADDR);
@@ -204,7 +204,7 @@ void PatrolInfo_Init(void)
 
     /* 校验和 */
     checksum = PatrolInfo_Checksum(data, PATROL_INFO_CHECKSUM_OFFSET);
-    storedChecksum = (uint16_t)data[16] | ((uint16_t)data[17] << 8);
+    storedChecksum = (uint16_t)data[20] | ((uint16_t)data[21] << 8);
     if (checksum != storedChecksum) {
         return;
     }

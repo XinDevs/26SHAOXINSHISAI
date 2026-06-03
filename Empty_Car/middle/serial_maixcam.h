@@ -73,6 +73,7 @@ uint8_t SerialMaixCam_Process(void);
 const char *SerialMaixCam_GetCommand(void);
 
 uint8_t SerialMaixCam_GetResultCode(void);
+void SerialMaixCam_ClearPending(void);
 
 uint8_t SerialMaixCam_SendStartRequest(void);
 uint8_t SerialMaixCam_SendStopRequest(void);

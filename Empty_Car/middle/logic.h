@@ -82,8 +82,31 @@ extern void LED_Off(void);                // 关指示灯
 /**
  * @brief 执行物理转弯动作
  * @param dir: TURN_LEFT 或 TURN_RIGHT
- * @note 控制组注意：执行转弯时必须是“原地自旋”，屏蔽一段灰度后，重新压中黑线才退出该函数！
+ * @note 控制组注意：执行转弯时必须是”原地自旋”，屏蔽一段灰度后，重新压中黑线才退出该函数！
  */
-extern void Execute_Physical_Turn(int dir); 
+extern void Execute_Physical_Turn(int dir);
+
+// ================= 5. 非阻塞决策接口 (供 main.c 状态机调用) =================
+
+/**
+ * @brief  设置摄像头识别结果缓存
+ * @param  resultCode MaixCam 识别结果码 (SERIAL_MAIXCAM_RESULT_*)
+ * @note   main.c 收到 MaixCam 数据后调用，供 Logic_Get_Turn_Direction 使用
+ */
+void Logic_SetVisionCache(uint8_t resultCode);
+
+/**
+ * @brief  非阻塞路口决策：根据摄像头颜色 + 拓扑地图决定转向方向
+ * @param  cameraColor 摄像头识别的颜色 (COLOR_RED / COLOR_GREEN / COLOR_NONE)
+ * @retval TURN_LEFT(0) 或 TURN_RIGHT(1): 正常转向方向
+ * @retval -1: 已到达终点(O点)，任务应结束
+ * @note   此函数同时更新图论状态 (edge_visited, last_node, curr_node 等)
+ */
+int Logic_Get_Turn_Direction(uint8_t cameraColor);
+
+/**
+ * @brief  重置 logic 全局状态 (任务开始/重新开始时调用)
+ */
+void Logic_Reset(void);
 
 #endif /* __LOGIC_H */

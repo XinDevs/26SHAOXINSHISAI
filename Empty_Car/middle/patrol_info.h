@@ -24,7 +24,7 @@ extern "C" {
 #endif
 
 /** @brief 最大记录结果数量 */
-#define PATROL_INFO_MAX_RESULTS 6U
+#define PATROL_INFO_MAX_RESULTS 10U
 
 /**
  * @brief  巡检信息快照结构体

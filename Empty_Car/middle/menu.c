@@ -50,6 +50,7 @@
 
 #define MENU_STACK_MAX   4    /* 菜单栈最大深度 */
 #define MENU_VISIBLE_ROWS 6   /* OLED 可见行数 */
+#define PATROL_INFO_PAGE_SIZE 6U
 
 /* ===== 菜单导航状态 ===== */
 static SystemMode_t  s_mode         = SYS_MENU;  /* 当前系统模式 */
@@ -58,6 +59,7 @@ static uint8_t       s_depth        = 0U;         /* 当前深度 */
 static uint8_t       s_cursor       = 0U;         /* 光标位置 */
 static uint8_t       s_scroll       = 0U;         /* 滚动偏移 */
 static uint8_t       s_currentParent = 0U;        /* 当前父菜单索引 */
+static uint8_t       s_patrolInfoPage = 0U;
 
 /* ===== PID 编辑状态 ===== */
 static PIDEditPage_t s_pidEditPage  = PID_EDIT_LEFT;  /* 当前编辑页面 */
@@ -75,7 +77,8 @@ static void Menu_StartTask(uint8_t taskId)
     TaskId = taskId;
     PID_Gray_ResetYJunctionState();
     PatrolInfo_Start(SysMs);
-    (void)SerialMaixCam_SendStartRequest();
+    (void)SerialMaixCam_SendStopRequest();
+    SerialMaixCam_ClearPending();
     Menu_SetMode(SYS_TASK_RUN);
 }
 
@@ -84,7 +87,7 @@ static void actionGrayLine(void) { Menu_StartTask(3U); }
 static void actionYawStraight(void) { TargetYaw = CurrentYaw; Menu_StartTask(4U); }
 static void actionLineLeft(void) { Menu_StartTask(1U); }
 static void actionLineRandom(void) { Menu_StartTask(2U); }
-static void actionPatrolInfo(void) { Menu_SetMode(SYS_PATROL_INFO); }
+static void actionPatrolInfo(void) { s_patrolInfoPage = 0U; Menu_SetMode(SYS_PATROL_INFO); }
 static void actionMonitor(void) { Menu_SetMode(SYS_MONITOR); }
 static void actionSpeedLoopTest(void) { PID_ResetRuntimeState(CurrentYaw); Menu_SetMode(SYS_SPEED_LOOP_TEST); }
 static void actionPwmTest(void) { DCMotor_SetDuty(0, 0); Menu_SetMode(SYS_PWM_TEST); }
@@ -286,7 +289,26 @@ void Menu_ProcessKey(uint8_t key)
 
     /* 巡检信息页面：任意键返回 */
     if (s_mode == SYS_PATROL_INFO) {
-        s_mode = SYS_MENU;
+        PatrolInfoSnapshot_t info;
+        uint8_t pageCount;
+
+        PatrolInfo_GetSnapshot(&info);
+        pageCount = (info.count > 0U) ?
+                    (uint8_t)((info.count + PATROL_INFO_PAGE_SIZE - 1U) / PATROL_INFO_PAGE_SIZE) :
+                    1U;
+
+        if ((key == 1U) && (s_patrolInfoPage > 0U)) {
+            s_patrolInfoPage--;
+        } else if ((key == 3U) && ((uint8_t)(s_patrolInfoPage + 1U) < pageCount)) {
+            s_patrolInfoPage++;
+        } else if (key == 2U) {
+            s_patrolInfoPage++;
+            if (s_patrolInfoPage >= pageCount) {
+                s_patrolInfoPage = 0U;
+            }
+        } else if (key == 4U) {
+            s_mode = SYS_MENU;
+        }
         return;
     }
 
@@ -533,7 +555,7 @@ static void Menu_RenderMonitor(void)
 static const char *Menu_PatrolOrderText(uint8_t index)
 {
     static const char *orders[PATROL_INFO_MAX_RESULTS] = {
-        "一", "二", "三", "四", "五", "六"
+        "一", "二", "三", "四", "五", "六", "七", "八", "九", "十"
     };
 
     return (index < PATROL_INFO_MAX_RESULTS) ? orders[index] : "";
@@ -565,6 +587,8 @@ static void Menu_RenderPatrolInfo(void)
 {
     PatrolInfoSnapshot_t info;
     uint8_t line;
+    uint8_t pageCount;
+    uint8_t firstIndex;
 
     PatrolInfo_GetSnapshot(&info);
 
@@ -578,11 +602,19 @@ static void Menu_RenderPatrolInfo(void)
         return;
     }
 
+    pageCount = (info.count > 0U) ?
+                (uint8_t)((info.count + PATROL_INFO_PAGE_SIZE - 1U) / PATROL_INFO_PAGE_SIZE) :
+                1U;
+    if (s_patrolInfoPage >= pageCount) {
+        s_patrolInfoPage = (uint8_t)(pageCount - 1U);
+    }
+    firstIndex = (uint8_t)(s_patrolInfoPage * PATROL_INFO_PAGE_SIZE);
+
     OLED_ShowString(0, 0, "巡检用时", OLED_12X12);
     OLED_Printf(54, 2, OLED_6X8, "%lus", (unsigned long)info.elapsedSeconds);
 
     for (line = 0U; line < 3U; line++) {
-        uint8_t first = (uint8_t)(line * 2U);
+        uint8_t first = (uint8_t)(firstIndex + line * 2U);
         uint8_t second = (uint8_t)(first + 1U);
         uint8_t y = (uint8_t)(16U + line * 13U);
 
@@ -600,7 +632,13 @@ static void Menu_RenderPatrolInfo(void)
         OLED_ShowString(0, 24, "None", OLED_12X12);
     }
 
-    OLED_Printf(0, 56, OLED_6X8, "Any key:Back");
+    if (pageCount > 1U) {
+        OLED_Printf(0, 56, OLED_6X8, "K1/K3 Pg %u/%u K4",
+                    (unsigned int)(s_patrolInfoPage + 1U),
+                    (unsigned int)pageCount);
+    } else {
+        OLED_Printf(0, 56, OLED_6X8, "K4:Back");
+    }
     OLED_Update();
 }
 
@@ -768,6 +806,7 @@ void Task_Finish(void)
     (void)SerialMaixCam_SendStopRequest();
     TaskId = 0U;
     Turn_Reset();
+    s_patrolInfoPage = 0U;
     Menu_SetMode(SYS_PATROL_INFO);
     OledFlag = 1U;
 }

@@ -19,6 +19,9 @@
  * @brief  灰度巡线环参数初始化
  */
 void PID_Grayscale_Init(float kp, float ki, float kd);
+void PID_GrayscaleWeights_Init(const float leftWeights[GW_GRAY_MODULE_CHANNEL_COUNT]);
+void PID_Grayscale_InitWithWeights(float kp, float ki, float kd,
+                                   const float leftWeights[GW_GRAY_MODULE_CHANNEL_COUNT]);
 /**
  * @brief  更新 PID 模块使用的当前 Yaw 反馈值（由 main.c 的 10ms IMU 更新调用）
  */

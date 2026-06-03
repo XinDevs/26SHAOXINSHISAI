@@ -1,5 +1,47 @@
 #include "logic.h"
+#include "dc_motor.h"
+#include "buzzer_led.h"
+#include "delay.h"
+#include "serial_maixcam.h"
+#include "Flash.h"
+#include "main.h"
 #include <string.h>
+
+/* ================= 底层适配函数 ================= */
+/* 将 logic.h 声明的外部接口映射到项目已有的驱动函数 */
+
+void Motor_Stop(void)          { DCMotor_Brake(); }
+void Motor_Brake_And_Lock(void){ /* 由 Logic_Get_Turn_Direction 返回 -1 代替死循环 */ }
+void Delay_ms(uint32_t ms)     { delay_ms(ms); }
+
+void Buzzer_Beep(uint32_t ms)              { (void)ms; BuzzerLed_StartRedAlert(); }
+void Buzzer_Beep_Intermittent(uint32_t ms) { (void)ms; BuzzerLed_StartGreenAlert(); }
+void Buzzer_Off(void)                      { BuzzerLed_AllOff(); }
+void LED_Red_On(void)                      { /* 已包含在 BuzzerLed_StartRedAlert 中 */ }
+void LED_Green_On(void)                    { /* 已包含在 BuzzerLed_StartGreenAlert 中 */ }
+void LED_Off(void)                         { BuzzerLed_AllOff(); }
+
+static MaixCam_Data s_visionCache = {COLOR_NONE, SHAPE_NONE};
+
+MaixCam_Data Get_Vision_Data(void) { return s_visionCache; }
+
+void EEPROM_Save_Marker(int index, LetterType letter, uint8_t color, uint8_t shape)
+{
+    /* 简单写入 Flash，每条记录 4 字节: [index][letter][color][shape] */
+    uint8_t buf[4];
+    uint32_t addr = FLASH_TEST_ADDR + (uint32_t)index * 4U;
+    buf[0] = (uint8_t)(uint32_t)index;
+    buf[1] = (uint8_t)letter;
+    buf[2] = color;
+    buf[3] = shape;
+    Flash_WritePage(addr, buf, 4U);
+}
+
+void Execute_Physical_Turn(int dir)
+{
+    /* 非阻塞版本中不使用，物理转弯由 main.c 的 Turn_Start/Run/IsDone 执行 */
+    (void)dir;
+}
 
 // ================= 1. 全局状态与地图阵列 =================
 int sys_state = MODE_EXPLORE;
@@ -189,4 +231,165 @@ void On_Crossroad_Detected(void)
 
     // 交给底层控制组：执行原地物理转弯！
     Execute_Physical_Turn(turn_cmd);
+}
+
+// ================= 4. 非阻塞决策函数 (供 main.c 状态机调用) =================
+
+/**
+ * @brief  设置摄像头识别结果缓存 (main.c 在收到 MaixCam 数据后调用)
+ */
+void Logic_SetVisionCache(uint8_t resultCode)
+{
+    s_visionCache.color = COLOR_NONE;
+    s_visionCache.shape = SHAPE_NONE;
+
+    switch (resultCode) {
+        case SERIAL_MAIXCAM_RESULT_RED_CIRCLE:
+            s_visionCache.color = COLOR_RED;
+            s_visionCache.shape = SHAPE_CIRCLE;
+            break;
+        case SERIAL_MAIXCAM_RESULT_RED_SQUARE:
+            s_visionCache.color = COLOR_RED;
+            s_visionCache.shape = SHAPE_SQUARE;
+            break;
+        case SERIAL_MAIXCAM_RESULT_GREEN_CIRCLE:
+            s_visionCache.color = COLOR_GREEN;
+            s_visionCache.shape = SHAPE_CIRCLE;
+            break;
+        case SERIAL_MAIXCAM_RESULT_GREEN_SQUARE:
+            s_visionCache.color = COLOR_GREEN;
+            s_visionCache.shape = SHAPE_SQUARE;
+            break;
+        default:
+            break;
+    }
+}
+
+/**
+ * @brief  非阻塞路口决策：根据摄像头颜色 + 拓扑地图决定转向方向
+ * @param  cameraColor 摄像头识别的颜色 (COLOR_RED / COLOR_GREEN / COLOR_NONE)
+ * @retval TURN_LEFT(0) 或 TURN_RIGHT(1): 正常转向方向
+ * @retval -1: 已到达终点(O点)，任务应结束
+ * @note   此函数同时更新图论状态 (edge_visited, last_node, curr_node, step 等)
+ */
+int Logic_Get_Turn_Direction(uint8_t cameraColor)
+{
+    step++;
+
+    // 终点判定：回家模式下回到 O 点
+    if (sys_state == MODE_GO_HOME && curr_node == NODE_O) {
+        return -1;
+    }
+
+    // 防超时保护
+    if (step >= 25 && sys_state == MODE_EXPLORE) {
+        sys_state = MODE_GO_HOME;
+    }
+
+    LetterType view_letter = map_forward_letter[curr_node][last_node];
+    uint8_t m_color = cameraColor;
+
+    int turn_cmd = TURN_RIGHT; // 默认值
+    int node_L = map_next[curr_node][last_node][TURN_LEFT];
+    int node_R = map_next[curr_node][last_node][TURN_RIGHT];
+
+    // ============ 探索模式决策 ============
+    if (sys_state == MODE_EXPLORE)
+    {
+        // 记录标识得分
+        if (m_color != COLOR_NONE && view_letter != LETTER_NONE) {
+            if (!marker_recorded[view_letter]) {
+                marker_recorded[view_letter] = true;
+                found_count++;
+                EEPROM_Save_Marker(found_count, view_letter, m_color, s_visionCache.shape);
+            }
+        }
+
+        // 保守回家判断
+        if (found_count >= target_N) {
+            sys_state = MODE_GO_HOME;
+        }
+        else if (curr_node == NODE_N1 && last_node != NODE_O) {
+            sys_state = MODE_GO_HOME;
+        }
+        else
+        {
+            // 颜色引导 + DFS 寻路
+            if (m_color == COLOR_RED && edge_visited[curr_node][node_R] < 2) {
+                turn_cmd = TURN_RIGHT;
+                Buzzer_Beep(2000);
+                LED_Red_On();
+            }
+            else if (m_color == COLOR_GREEN && edge_visited[curr_node][node_L] < 2) {
+                turn_cmd = TURN_LEFT;
+                Buzzer_Beep_Intermittent(2000);
+                LED_Green_On();
+            }
+            else {
+                Buzzer_Off();
+                LED_Off();
+
+                int vL = edge_visited[curr_node][node_L];
+                int vR = edge_visited[curr_node][node_R];
+
+                if (vL < vR) {
+                    turn_cmd = TURN_LEFT;
+                } else if (vR < vL) {
+                    turn_cmd = TURN_RIGHT;
+                } else {
+                    turn_cmd = TURN_RIGHT; // 默认靠右法则
+                }
+            }
+        }
+    }
+
+    // ============ 回家模式决策 ============
+    if (sys_state == MODE_GO_HOME)
+    {
+        Buzzer_Off();
+        LED_Off();
+
+        if (curr_node == NODE_N1) {
+            if (map_next[NODE_N1][last_node][TURN_LEFT] == NODE_O) {
+                turn_cmd = TURN_LEFT;
+            } else {
+                turn_cmd = TURN_RIGHT;
+            }
+        } else {
+            if (dist_to_O[node_L] < dist_to_O[node_R]) {
+                turn_cmd = TURN_LEFT;
+            } else {
+                turn_cmd = TURN_RIGHT;
+            }
+        }
+    }
+
+    // ============ 图论状态更新 ============
+    int next_node = map_next[curr_node][last_node][turn_cmd];
+
+    if (sys_state == MODE_GO_HOME && curr_node == NODE_N1) {
+        next_node = NODE_O;
+    }
+
+    edge_visited[curr_node][next_node]++;
+    last_node = curr_node;
+    curr_node = next_node;
+
+    return turn_cmd;
+}
+
+/**
+ * @brief  重置 logic 全局状态 (任务开始/重新开始时调用)
+ */
+void Logic_Reset(void)
+{
+    sys_state = MODE_EXPLORE;
+    last_node = NODE_O;
+    curr_node = NODE_N1;
+    found_count = 0;
+    step = 0;
+    memset(edge_visited, 0, sizeof(edge_visited));
+    memset(marker_recorded, 0, sizeof(marker_recorded));
+    s_visionCache.color = COLOR_NONE;
+    s_visionCache.shape = SHAPE_NONE;
 }

@@ -95,6 +95,17 @@ uint8_t SerialMaixCam_GetResultCode(void)
     return s_resultCode;
 }
 
+void SerialMaixCam_ClearPending(void)
+{
+    __disable_irq();
+    Serial_RxFlag[SERIAL_UART2] = 0U;
+    Serial_RxPacket[SERIAL_UART2][0] = '\0';
+    __enable_irq();
+
+    s_resultCode = SERIAL_MAIXCAM_RESULT_NONE;
+    s_cmdBuf[0] = '\0';
+}
+
 uint8_t SerialMaixCam_SendStartRequest(void)
 {
     return SerialMaixCam_SendPayloadByte(SERIAL_MAIXCAM_CMD_START_REQUEST);

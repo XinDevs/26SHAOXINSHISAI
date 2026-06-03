@@ -75,6 +75,18 @@ void PID_Grayscale_Init(float kp, float ki, float kd)
     pid_set_gains(&PID_Grayscale, kp, ki, kd);
 }
 
+void PID_GrayscaleWeights_Init(const float leftWeights[GW_GRAY_MODULE_CHANNEL_COUNT])
+{
+    PID_SetGrayscaleLeftWeights(leftWeights);
+}
+
+void PID_Grayscale_InitWithWeights(float kp, float ki, float kd,
+                                   const float leftWeights[GW_GRAY_MODULE_CHANNEL_COUNT])
+{
+    PID_Grayscale_Init(kp, ki, kd);
+    PID_GrayscaleWeights_Init(leftWeights);
+}
+
 /**
  * @brief  更新 PID 模块使用的 Yaw 反馈值
  * @details 建议在 main 的 IMU 更新周期(当前为 10ms)调用该接口。
