@@ -6,7 +6,7 @@
  *          - 任务2：循迹，遇到 Y 路口后随机左/右转
  *          - 任务3：灰度循迹，灰度外环 + 速度内环串级 PID
  *          - 任务4：灰度循迹，遇到 Y 型岔路口停车
- *          - 任务5：预留
+ *          - 任务5：灰度循迹，遇到 Y 型岔路口转弯，转弯结束后停车
  *          定时器 1ms 中断驱动：10ms IMU 更新、20ms PID 触发、100ms OLED 刷新。
  *          支持串口在线调参和 OLED 菜单测试页。
  */
@@ -419,40 +419,33 @@ int main(void)
                         }
                         break;   
 //*********************************************************************************************************
-//*************************************** */ 任务3：循迹，路口随机转向***************************************
+//**********************************任务3：循迹（加速版），路口摄像头识别************************************** 
 //*********************************************************************************************************
-                    case 3U:
-                        /*
-                         * 任务3：循迹，路口随机转向
-                         * - 灰度循迹行驶，遇到Y路口停车等摄像头识别
-                         * - 摄像头结果仅用于记录（Flash），不影响转向方向
-                         * - 转向方向由 RandomDirection() 随机决定
-                         * - 超时同样随机转向
-                         */
+                    case 3U:       
+                        {
+                    //*********************参数定义*****************************
+                        static const float TraceSpeed   = 0.4f;
+                        static const float TurnOuterSpd = 0.2f;
+                        static const float TurnInnerSpd = -0.2f;
+
                         if (g_grayParamProfile != 1U) {
-                            PID_Grayscale_Init(1.8f, 0.0f, 0.0f);
-                            PID_SetGrayscaleLeftWeights6(3.5f, 3.0f, 2.5f,
-                                                         1.1f, 0.9f, 0.5f);
+                            PID_Grayscale_Init(0.5f, 0.0f, 0.15f);
+                            PID_SetGrayscaleLeftWeights6(0.35f, 0.30f, 0.30f,
+                                                         0.20f, 0.08f, 0.05f);
+                            // PID_Grayscale_Init(0.8f, 0.0f, 0.1f);
+                            // PID_SetGrayscaleLeftWeights6(1.2f, 0.9f, 0.65f,
+                            //                             0.40f, 0.22f, 0.08f);
                             PID_Reset(GRAYSCALE);
                             g_grayParamProfile = 1U;
                         }
                         switch (TaskState) {
                             case TASK_TRACE:
-                                /*
-                                 * 循迹状态：
-                                 * - 第一次横线记录为起点，继续循迹；
-                                 * - 第二次横线到达终点，切到 TASK_FINISH；
-                                 * - 未压横线时检测 Y 路口，避免全亮误判。
-                                 */
                                 LineState = Main_CheckStartFinishLineCrossing();
                                 if (LineState >= 2U) {
                                     TaskState = TASK_FINISH;
                                 }
                                 else if ((LineState == 0U) &&
-                                           (PID_Gray_IsYJunction() != 0U))
-                                          // (PID_Gray_IsCenterYJunction() != 0U))
-                                     {
-                                    /* 检测到Y路口：刹停，请求 MaixCam 识别。 */
+                                           (PID_Gray_IsYJunction() != 0U)) {
                                     DCMotor_Brake();
                                     PID_ResetAll();
                                     CameraReady = 0U;
@@ -464,8 +457,7 @@ int main(void)
                                     TaskState = TASK_CAMERA;
                                 }
                                 else {
-                                    /* 正常灰度循迹。 */
-                                    PID_ExecuteGrayCascade(0.4f,
+                                    PID_ExecuteGrayCascade(TraceSpeed,
                                                            0.0f,
                                                            LINE_SPEED_DIFF_SCALE);
                                     DutyReady = 1U;
@@ -473,51 +465,45 @@ int main(void)
                                 break;
 
                             case TASK_CAMERA:
-                                /*
-                                 * 摄像头等待状态：
-                                 * - 收到结果后映射颜色、记录到 Flash，但转向方向随机；
-                                 * - 超时同样随机转向。
-                                 */
                                 if (CameraReady != 0U) {
                                     int prev_node = curr_node;
                                     int prev_last = last_node;
                                     char reportBuf[64];
-                                    uint8_t camColor;
                                     if (CameraCode == SERIAL_MAIXCAM_RESULT_NONE) {
-                                        /* 摄像头未识别到标识：COLOR_NONE，随机转向。 */
-                                        camColor = COLOR_NONE;
-                                        TurnDir = RandomDirection();
+                                        TurnDir = Logic_Get_Turn_Direction2(COLOR_NONE);
                                         int lt = (int)map_forward_letter[prev_node][prev_last];
                                         char lc = (lt >= 1 && lt <= 12) ? (char)('A' + lt - 1) : 'N';
                                         snprintf(reportBuf, sizeof(reportBuf),
-                                                 "[Rand] node=%d last=%d color=%c letter=%c found=%d\r\n",
+                                                 "[Home] node=%d last=%d color=%c letter=%c found=%d\r\n",
                                                  prev_node, prev_last, 'N', lc, found_count);
                                         Serial0_SendString(reportBuf);
                                     } else {
-                                        /* 摄像头识别到标识：记录到 Flash，随机转向。 */
                                         if (CameraRecorded == 0U) {
                                             PatrolInfo_RecordResult(CameraCode);
                                             CameraRecorded = 1U;
                                         }
+                                        uint8_t camColor;
                                         switch(CameraCode) {
                                             case SERIAL_MAIXCAM_RESULT_RED_CIRCLE:
                                             case SERIAL_MAIXCAM_RESULT_RED_SQUARE:
                                                 camColor = COLOR_RED;
+                                                TurnDir = Logic_Get_Turn_Direction2(COLOR_RED);
                                                 break;
                                             case SERIAL_MAIXCAM_RESULT_GREEN_CIRCLE:
                                             case SERIAL_MAIXCAM_RESULT_GREEN_SQUARE:
                                                 camColor = COLOR_GREEN;
+                                                TurnDir = Logic_Get_Turn_Direction2(COLOR_GREEN);
                                                 break;
                                             default:
                                                 camColor = COLOR_NONE;
+                                                TurnDir = Logic_Get_Turn_Direction2(COLOR_NONE);
                                                 break;
                                         }
-                                        TurnDir = RandomDirection();
                                         int lt = (int)map_forward_letter[prev_node][prev_last];
                                         char lc = (lt >= 1 && lt <= 12) ? (char)('A' + lt - 1) : 'N';
                                         char cc = (camColor == COLOR_RED) ? 'R' : (camColor == COLOR_GREEN) ? 'G' : 'N';
                                         snprintf(reportBuf, sizeof(reportBuf),
-                                                 "[Rand] node=%d last=%d color=%c letter=%c found=%d\r\n",
+                                                 "[Home] node=%d last=%d color=%c letter=%c found=%d\r\n",
                                                  prev_node, prev_last, cc, lc, found_count);
                                         Serial0_SendString(reportBuf);
                                     }
@@ -526,34 +512,28 @@ int main(void)
                                     (void)SerialMaixCam_SendStopRequest();
                                     SerialMaixCam_ClearPending();
                                     PID_ResetAll();
-                                    Turn_Start(TurnDir, 0.3, -0.1, SysMs);
+                                    Turn_Start(TurnDir, TurnOuterSpd, TurnInnerSpd, SysMs);
                                     TaskState = TASK_TURN;
                                 }
                                 else if ((uint32_t)(SysMs - CameraStartMs) >= CAMERA_TURN_TIMEOUT_MS) {
-                                    /* 摄像头超时：随机转向，继续任务。 */
-                                    TurnDir = RandomDirection();
+                                    TurnDir = Logic_Get_Turn_Direction2(COLOR_NONE);
                                     (void)SerialMaixCam_SendStopRequest();
                                     SerialMaixCam_ClearPending();
                                     PID_ResetAll();
-                                    Turn_Start(TurnDir, 0.3, -0.1, SysMs);
+                                    Turn_Start(TurnDir, TurnOuterSpd, TurnInnerSpd, SysMs);
                                     TaskState = TASK_TURN;
                                 }
                                 break;
 
                             case TASK_TURN:
-                                /*
-                                 * 转弯状态：
-                                 * - Turn_Run() 每 20ms 执行速度环 PID；
-                                 * - Turn_IsDone() 延时后检测目标侧传感器是否压线。
-                                 */
                                 Turn_Run();
                                 if (Turn_IsDone(SysMs, TURN_LINE_DETECT_DELAY_MS) != 0U) {
-                                    /* 已重新压上线：恢复循迹。 */
                                     Turn_Reset();
                                     PID_ResetAll();
+                                    DCMotor_Brake();  /* 转弯结束先刹停，防止反转打滑 */
                                     PID_Gray_ResetYJunctionState();
                                     TaskState = TASK_TRACE;
-                                    PID_ExecuteGrayCascade(BASE_LINE_SPEED,
+                                    PID_ExecuteGrayCascade(TraceSpeed,
                                                            0.0f,
                                                            LINE_SPEED_DIFF_SCALE);
                                     DutyReady = 1U;
@@ -569,37 +549,26 @@ int main(void)
                                 break;
 
                             default:
-                                /* 异常状态保护：回到循迹并清理转向/PID 状态。 */
                                 TaskState = TASK_TRACE;
                                 Turn_Reset();
                                 PID_ResetAll();
                                 break;
                         }
+                        }  /* end case 3U block */
                         break;
-
-                    case 4U:       // 任务4：循迹测试
-                        if (g_grayParamProfile != 1U) {
-                            PID_Grayscale_Init(0.6f, 0.0f, 0.2f);
-                            PID_SetGrayscaleLeftWeights6(0.4f, 0.35f, 0.30f,
-                                                         0.20f, 0.08f, 0.05f);
-                            PID_Reset(GRAYSCALE);
-                            g_grayParamProfile = 1U;
-                        }
-                        // if (PID_Gray_IsYJunction() != 0U) {
-                        //     Task_GiveUp();
-                        // } else {
-                            PID_ExecuteGrayCascade(0.4,
-                                                   0.0f,
-                                                   LINE_SPEED_DIFF_SCALE);
-                            DutyReady = 1U;
-                        //}
-                        break;
-
-                    case 5U:       // 任务5：循迹，走到Y路口停止
+//*********************************************************************************************************
+//**********************************任务4：循迹，走到Y路口停止**************************************
+//*********************************************************************************************************
+                    case 4U:       // 任务4：循迹，Y路口停车
+                        {
+                    //*********************参数定义*****************************
+                        static const float TraceSpeed   = 0.4f;
+                        static const float TurnOuterSpd = 0.2f;
+                        static const float TurnInnerSpd = 0.1f;
 
                         if (g_grayParamProfile != 1U) {
-                            PID_Grayscale_Init(0.6f, 0.0f, 0.2f);
-                            PID_SetGrayscaleLeftWeights6(0.4f, 0.35f, 0.30f,
+                            PID_Grayscale_Init(0.5f, 0.0f, 0.15f);
+                            PID_SetGrayscaleLeftWeights6(0.35f, 0.30f, 0.30f,
                                                          0.20f, 0.08f, 0.05f);
                             PID_Reset(GRAYSCALE);
                             g_grayParamProfile = 1U;
@@ -612,11 +581,76 @@ int main(void)
                             Menu_SetMode(SYS_MENU);
                             OledFlag = 1U;
                         } else {
-                            PID_ExecuteGrayCascade(0.4f,
+                            PID_ExecuteGrayCascade(TraceSpeed,
                                                    0.0f,
                                                    LINE_SPEED_DIFF_SCALE);
                             DutyReady = 1U;
                         }
+                        }  /* end case 4U block */
+                        break;
+//*********************************************************************************************************
+//********************************* 任务5：循迹，Y路口转弯后停止**************************************
+//*********************************************************************************************************
+                    case 5U:       // 任务5：循迹，Y路口转弯后停车
+                        {
+                    //*********************参数定义*****************************
+                        static const float TraceSpeed   = 0.4f;
+                        static const float TurnOuterSpd = 0.3f;
+                        static const float TurnInnerSpd = 0.06f;
+
+                        if (g_grayParamProfile != 1U) {
+                            PID_Grayscale_Init(0.5f, 0.0f, 0.15f);
+                            PID_SetGrayscaleLeftWeights6(0.35f, 0.30f, 0.30f,
+                                                         0.20f, 0.08f, 0.05f);
+                            PID_Reset(GRAYSCALE);
+                            g_grayParamProfile = 1U;
+                        }
+                        switch (TaskState) {
+                            case TASK_TRACE:
+                                if (PID_Gray_IsYJunction() != 0U) {
+                                    DCMotor_Brake();
+                                    PID_ResetAll();
+                                    PID_Gray_ResetYJunctionState();
+                                    JunctionPauseStartMs = SysMs;
+                                    TaskState = TASK_PAUSE;
+                                } else {
+                                    PID_ExecuteGrayCascade(TraceSpeed,
+                                                           0.0f,
+                                                           LINE_SPEED_DIFF_SCALE);
+                                    DutyReady = 1U;
+                                }
+                                break;
+
+                            case TASK_PAUSE:
+                                DCMotor_Brake();
+                                if ((uint32_t)(SysMs - JunctionPauseStartMs) >= 500U) {
+                                    Turn_Start(TURN_RIGHT, TurnOuterSpd, TurnInnerSpd, SysMs);
+                                    TaskState = TASK_TURN;
+                                }
+                                break;
+
+                            case TASK_TURN:
+                                Turn_Run();
+                                if (Turn_IsDone(SysMs, TURN_LINE_DETECT_DELAY_MS) != 0U) {
+                                    Turn_Reset();
+                                    PID_ResetAll();
+                                    DCMotor_Brake();
+                                    PID_Gray_ResetYJunctionState();
+                                    TaskId = 0U;
+                                    Menu_SetMode(SYS_MENU);
+                                    OledFlag = 1U;
+                                } else {
+                                    DutyReady = 1U;
+                                }
+                                break;
+
+                            default:
+                                TaskState = TASK_TRACE;
+                                Turn_Reset();
+                                PID_ResetAll();
+                                break;
+                        }
+                        }  /* end case 5U block */
                         break;
 
                     default:

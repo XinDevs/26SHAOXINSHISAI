@@ -26,6 +26,8 @@ void Turn_Reset(void)
     s_turnActive = 0U;
     s_turnStartMs = 0U;
     s_turnLeft = 0U;
+    /* 清除直控反转标志，恢复正常速度环 */
+    PID_GoalSpeedPair_Set(0.0f, 0.0f);
 }
 
 /**
@@ -48,14 +50,30 @@ uint8_t Turn_IsRunning(void)
  */
 void Turn_Start(uint8_t turnLeft, float outerSpeed, float innerSpeed, uint32_t nowMs)
 {
+    float leftSpeed;
+    float rightSpeed;
+
     s_turnActive = 1U;
     s_turnStartMs = nowMs;
     s_turnLeft = (turnLeft != 0U) ? 1U : 0U;
 
     if (turnLeft != 0U) {
-        PID_GoalSpeedPair_Set(innerSpeed, outerSpeed);
+        leftSpeed  = innerSpeed;   /* 左轮=内侧 */
+        rightSpeed = outerSpeed;   /* 右轮=外侧 */
     } else {
-        PID_GoalSpeedPair_Set(outerSpeed, innerSpeed);
+        leftSpeed  = outerSpeed;   /* 左轮=外侧 */
+        rightSpeed = innerSpeed;   /* 右轮=内侧 */
+    }
+
+    /* 先清除反转标志并设置目标速度 */
+    PID_GoalSpeedPair_Set(leftSpeed, rightSpeed);
+
+    /* 负速度的轮启用直控反转 */
+    if (leftSpeed < 0.0f) {
+        PID_SetSingleTargetSpeed(MOTOR_LEFT, leftSpeed);
+    }
+    if (rightSpeed < 0.0f) {
+        PID_SetSingleTargetSpeed(MOTOR_RIGHT, rightSpeed);
     }
 }
 

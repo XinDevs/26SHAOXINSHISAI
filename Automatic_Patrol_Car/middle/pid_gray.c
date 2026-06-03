@@ -72,8 +72,8 @@ static uint8_t PID_Gray_CountActive(uint8_t startIndex, uint8_t endIndex)
  */
 void PID_Grayscale_Init(float kp, float ki, float kd)
 {
-    PID_Grayscale.OutputMax = 0.8f;
-    PID_Grayscale.OutputMin = -0.8f;
+    PID_Grayscale.OutputMax = 1.5f;
+    PID_Grayscale.OutputMin = -1.5f;
     PID_Grayscale.IntegralMax = 2.0f;
     PID_Grayscale.IntegralMin = -2.0f;
     pid_set_gains(&PID_Grayscale, kp, ki, kd);

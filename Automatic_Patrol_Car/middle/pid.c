@@ -233,6 +233,37 @@ void PID_GoalSpeedPair_Set(float goalLeftSpeedMps, float goalRightSpeedMps)
 }
 
 /**
+ * @brief  设置单轮目标速度（支持正反转，不立即写电机）
+ * @param  item MOTOR_LEFT 或 MOTOR_RIGHT
+ * @param  speedMps 目标速度，负值表示反转
+ * @details 正值走速度环闭环，负值启用直控反转占空比。
+ *          与 PID_GoalSpeedPair_Set 配合使用，之后由
+ *          PID_ExecuteSpeedInnerLoop 统一计算并输出到电机。
+ */
+void PID_SetSingleTargetSpeed(PID_ITEM item, float speedMps)
+{
+    if (item == MOTOR_LEFT) {
+        g_pidRuntime.targetLeftSpeedMps = speedMps;
+        if (speedMps < 0.0f) {
+            g_leftDirectReverse = 1U;
+            g_pidRuntime.leftDutyCmd = (int16_t)(-pid_reverse_duty_from_speed(speedMps));
+            PID_Reset(MOTOR_LEFT);
+        } else {
+            g_leftDirectReverse = 0U;
+        }
+    } else if (item == MOTOR_RIGHT) {
+        g_pidRuntime.targetRightSpeedMps = speedMps;
+        if (speedMps < 0.0f) {
+            g_rightDirectReverse = 1U;
+            g_pidRuntime.rightDutyCmd = (int16_t)(-pid_reverse_duty_from_speed(speedMps));
+            PID_Reset(MOTOR_RIGHT);
+        } else {
+            g_rightDirectReverse = 0U;
+        }
+    }
+}
+
+/**
  * @brief  开启速度覆盖模式
  * @details 开启后外环(灰度/Yaw)不再修改目标速度, 由调用者直接指定左右轮目标。
  */

@@ -88,6 +88,9 @@ void PID_GoalSpeedRight_InitEx(float goalSpeedRightMps, uint8_t forward);
 /* 设置左右轮目标速度 */
 void PID_GoalSpeedPair_Set(float goalLeftSpeedMps, float goalRightSpeedMps);
 
+/* 设置单轮目标速度（支持正反转，负值=反转） */
+void PID_SetSingleTargetSpeed(PID_ITEM item, float speedMps);
+
 /* 启用速度覆盖模式 */
 void PID_EnableSpeedOverride(float goalLeftSpeedMps, float goalRightSpeedMps);
 
