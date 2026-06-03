@@ -6,3 +6,6 @@ Empty_Car/.claude/
 Empty_Car/.theia/
 Empty_Car/.git_nested_backup/
 Empty_Car/Debug/
+
+# Zip files
+*.zip
