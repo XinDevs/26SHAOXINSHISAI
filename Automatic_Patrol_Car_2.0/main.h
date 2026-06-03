@@ -1,3 +1,4 @@
+
 /**
  * @file    main.h
  * @brief   主程序全局参数与接口声明
@@ -12,7 +13,7 @@ extern "C" {
 #endif
 
 /* PID 等待执行计数上限，用于限制主循环中待处理控制周期的累积。 */
-#define PID_PENDING_COUNT_MAX  (100U)
+#define PID_PENDING_COUNT_MAX  (3U)
 
 /* 循迹基础速度，单位 m/s。 */
 #define BASE_LINE_SPEED        (0.3f)

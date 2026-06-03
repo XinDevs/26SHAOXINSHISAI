@@ -60,11 +60,11 @@ static float GyroDirY = 1.0f;
 static float GyroDirZ = -1.0f;  /* Z 轴反向，适配安装方向 */
 
 typedef enum {
-    TASK_TRACE = 0,   /* 循迹状态：正常沿线行驶，并检测横线/Y路口。 */
-    TASK_CAMERA,      /* 摄像头状态：停车等待识别结果或等待超时决策。 */
-    TASK_PAUSE,       /* 暂停状态：任务3路口刹停一段时间后再随机转向。 */
-    TASK_TURN,        /* 转弯状态：执行 Turn_Run()，直到重新检测回线。 */
-    TASK_FINISH       /* 结束状态：任务完成，刹车并返回菜单。 */
+    TASK_TRACE = 0,
+    TASK_CAMERA,
+    TASK_JUNCTION_PAUSE,
+    TASK_TURN,
+    TASK_FINISH
 } TaskState_t;
 
 static TaskState_t TaskState = TASK_TRACE;
@@ -450,7 +450,7 @@ int main(void)
                                     DCMotor_Brake();
                                     PID_ResetAll();
                                     JunctionPauseStartMs = SysMs;
-                                    TaskState = TASK_PAUSE;
+                                    TaskState = TASK_JUNCTION_PAUSE;
                                 } else {
                                     PID_ExecuteGrayGyroCascade(0.5f,
                                                                0.0f,
@@ -460,7 +460,7 @@ int main(void)
                                 }
                                 break;
 
-                            case TASK_PAUSE:
+                            case TASK_JUNCTION_PAUSE:
                                 DCMotor_Brake();
                                 if ((uint32_t)(SysMs - JunctionPauseStartMs) >= CAMERA_TURN_TIMEOUT_MS) {
                                     TurnDir = RandomDirection();
