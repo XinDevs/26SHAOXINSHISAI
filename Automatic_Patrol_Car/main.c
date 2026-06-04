@@ -450,7 +450,7 @@ int main(void)
                                     TaskState = TASK_FINISH;
                                 }
                                 else if ((LineState == 0U) &&
-                                           (PID_Gray_IsYJunction() != 0U)) {
+                                           (PID_Gray_IsYJunctionLoose() != 0U)) {
                                     DCMotor_Brake();
                                     PID_ResetAll();
                                     CameraReady = 0U;
@@ -564,14 +564,15 @@ int main(void)
                         }  /* end case 3U block */
                         break;
 //*********************************************************************************************************
-//**********************************任务4：循迹，走到Y路口停止**************************************
+//**********************************任务4：颜色优先，无颜色随机转向**************************************
 //*********************************************************************************************************
                     case 4U:       // 任务4：颜色优先，无颜色随机转向
                         {
                     //*********************参数定义*****************************
                         static const float TraceSpeed   = 0.3f;
-                        static const float TurnOuterSpd = 0.2f;
-                        static const float TurnInnerSpd = 0.1f;
+                        static const float TurnOuterSpd = 0.25f;
+                        static const float TurnInnerSpd = 0.05f;
+                        static const uint32_t Task4CameraTimeoutMs = 500U;
 
                         if (g_grayParamProfile != 1U) {
                             PID_Grayscale_Init(0.5f, 0.0f, 0.25f);
@@ -608,11 +609,27 @@ int main(void)
                             case TASK_CAMERA:
                                 if (CameraReady != 0U) {
                                     if (CameraCode == SERIAL_MAIXCAM_RESULT_NONE) {
+                                        BuzzerLed_AllOff();
                                         TurnDir = RandomDirection();
                                     } else {
                                         if (CameraRecorded == 0U) {
                                             PatrolInfo_RecordResult(CameraCode);
                                             CameraRecorded = 1U;
+                                        }
+                                        switch (CameraCode) {
+                                            case SERIAL_MAIXCAM_RESULT_RED_CIRCLE:
+                                            case SERIAL_MAIXCAM_RESULT_RED_SQUARE:
+                                                BuzzerLed_StartRedAlert();
+                                                break;
+
+                                            case SERIAL_MAIXCAM_RESULT_GREEN_CIRCLE:
+                                            case SERIAL_MAIXCAM_RESULT_GREEN_SQUARE:
+                                                BuzzerLed_StartGreenAlert();
+                                                break;
+
+                                            default:
+                                                BuzzerLed_AllOff();
+                                                break;
                                         }
                                         TurnDir = CameraDirection(CameraCode);
                                     }
@@ -624,7 +641,8 @@ int main(void)
                                     Turn_Start(TurnDir, TurnOuterSpd, TurnInnerSpd, SysMs);
                                     TaskState = TASK_TURN;
                                 }
-                                else if ((uint32_t)(SysMs - CameraStartMs) >= CAMERA_TURN_TIMEOUT_MS) {
+                                else if ((uint32_t)(SysMs - CameraStartMs) >= Task4CameraTimeoutMs) {
+                                    BuzzerLed_AllOff();
                                     TurnDir = RandomDirection();
                                     (void)SerialMaixCam_SendStopRequest();
                                     SerialMaixCam_ClearPending();

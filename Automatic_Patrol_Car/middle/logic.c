@@ -297,25 +297,9 @@ int Logic_Get_Turn_Direction(uint8_t cameraColor)   //如果cameracolor
     if (sys_state == MODE_EXPLORE)
     {
         // 保守回家判断
-        if (found_count >= target_N) {
-            if (m_color == COLOR_RED && edge_visited[curr_node][node_R] < 2) {
-                turn_cmd = TURN_RIGHT;
-                Buzzer_Beep(2000);
-                LED_Red_On();
-            }
-            else if (m_color == COLOR_GREEN && edge_visited[curr_node][node_L] < 2) {
-                turn_cmd = TURN_LEFT;
-                Buzzer_Beep_Intermittent(2000);
-                LED_Green_On();
-            }
-            sys_state = MODE_GO_HOME;
-        }
-
-        if (curr_node == NODE_N1 && last_node != NODE_O) {
-            sys_state = MODE_EXPLORE; 
-        }
-        else
+        if(found_count < target_N)
         {
+
             // 颜色引导 + DFS 寻路
             if (m_color == COLOR_RED && edge_visited[curr_node][node_R] < 5) {
                 turn_cmd = TURN_RIGHT;
@@ -351,6 +335,22 @@ int Logic_Get_Turn_Direction(uint8_t cameraColor)   //如果cameracolor
                 }
             }
         }
+        else if (found_count >= target_N) {
+            if (m_color == COLOR_RED && edge_visited[curr_node][node_R] < 2) {
+                turn_cmd = TURN_RIGHT;
+                Buzzer_Beep(2000);
+                LED_Red_On();
+            }
+            else if (m_color == COLOR_GREEN && edge_visited[curr_node][node_L] < 2) {
+                turn_cmd = TURN_LEFT;
+                Buzzer_Beep_Intermittent(2000);
+                LED_Green_On();
+            }
+            sys_state = MODE_GO_HOME;
+        }
+        // if (curr_node == NODE_N1 && last_node != NODE_O){
+        //     sys_state = MODE_EXPLORE; 
+        // }
         // 记录标识得分
         if (m_color != COLOR_NONE && view_letter != LETTER_NONE) {
             if (!marker_recorded[view_letter]) {
@@ -367,6 +367,7 @@ int Logic_Get_Turn_Direction(uint8_t cameraColor)   //如果cameracolor
         // LED_Off();
 
         if (curr_node == NODE_N1) {
+            //例如从N2来 特殊的点 其余的在else里
             if (map_next[NODE_N1][last_node][TURN_LEFT] == NODE_O) {
                 turn_cmd = TURN_LEFT;
             } else {
@@ -376,8 +377,25 @@ int Logic_Get_Turn_Direction(uint8_t cameraColor)   //如果cameracolor
             // 对比左右分支哪个离家更近（加入边的代价）
             int cost_L = edge_weight[curr_node][node_L] + dist_to_O[node_L];
             int cost_R = edge_weight[curr_node][node_R] + dist_to_O[node_R];
-
-            if (cost_L < cost_R) {
+            int vL = edge_visited[curr_node][node_L];
+            int vR = edge_visited[curr_node][node_R];
+            if (m_color == COLOR_RED && edge_visited[curr_node][node_R] < 5) {
+                turn_cmd = TURN_RIGHT;
+                Buzzer_Beep(2000);
+                LED_Red_On();
+            }
+            else if (m_color == COLOR_GREEN && edge_visited[curr_node][node_L] < 5) {
+                turn_cmd = TURN_LEFT;
+                Buzzer_Beep_Intermittent(2000);
+                LED_Green_On();
+            }
+            else if (vL < vR) {
+                turn_cmd = TURN_LEFT;
+            } 
+            else if (vR < vL) {
+                turn_cmd = TURN_RIGHT;
+            } 
+            else if (cost_L < cost_R) {
                 turn_cmd = TURN_LEFT;
             } else {
                 turn_cmd = TURN_RIGHT;
