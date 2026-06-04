@@ -29,8 +29,8 @@
  *  [1]  Line Auto       (LEAF)
  *  [2]  Line Random     (LEAF)
  *  [3]  Gray Line       (LEAF)
- *  [4]  Junction        (LEAF)
- *  [5]  Line: Stop Y    (LEAF)
+ *  [4]  Color/Rand Y    (LEAF)
+ *  [5]  Line: Turn Y    (LEAF)
  *  [6]  Patrol Info     (LEAF)
  *  [7]  Status          (LEAF)
  *  [8]  Tests           (NODE, 8 项)
@@ -91,7 +91,7 @@ static void Menu_StartTask(uint8_t taskId)
 static void actionAutoGoHome(void)   { Menu_StartTask(1U); }   /* 任务1：自主算法，优先回家 */
 static void actionAutoFindAll(void)  { Menu_StartTask(2U); }   /* 任务2：自主算法，查找所有色块 */
 static void actionLineRandom(void)   { Menu_StartTask(3U); }   /* 任务3：循迹，路口随机转向 */
-static void actionLineTest(void)     { TargetYaw = CurrentYaw; Menu_StartTask(4U); } /* 任务4：循迹测试 */
+static void actionLineTest(void)     { TargetYaw = CurrentYaw; Menu_StartTask(4U); } /* 任务4：颜色优先，无颜色随机转向 */
 static void actionLineStopY(void)    { Menu_StartTask(5U); }   /* 任务5：循迹，走到Y路口停止 */
 static void actionPatrolInfo(void) { s_patrolInfoPage = 0U; Menu_SetMode(SYS_PATROL_INFO); }
 static void actionMonitor(void) { Menu_SetMode(SYS_MONITOR); }
@@ -118,8 +118,8 @@ static const MenuItem_t menuItems[] = {
     { "Auto: Find All",  MENU_LEAF,  actionAutoFindAll,  0, 0 },
     /* [3] 自主算法：快速回家 */
     { "Auto: Go Home Fast", MENU_LEAF, actionLineRandom, 0, 0 },
-    /* [4] 循迹，到Y路口停止 */
-    { "Line: Stop Y",    MENU_LEAF,  actionLineTest,     0, 0 },
+    /* [4] 颜色优先，无颜色随机转向 */
+    { "Color/Rand Y",    MENU_LEAF,  actionLineTest,     0, 0 },
     /* [5] 循迹，到Y路口转弯后停止 */
     { "Line: Turn Y",    MENU_LEAF,  actionLineStopY,    0, 0 },
     /* [6] 巡检信息 */

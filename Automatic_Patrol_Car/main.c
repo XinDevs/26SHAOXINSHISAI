@@ -149,12 +149,13 @@ int main(void)
             Mode = Menu_GetMode();
 
             if ((Mode != SYS_TASK_RUN) ||
-                ((TaskId != 1U) && (TaskId != 2U) && (TaskId != 3U) && (TaskId != 5U))) {
+                ((TaskId != 1U) && (TaskId != 2U) && (TaskId != 3U) && (TaskId != 4U) && (TaskId != 5U))) {
                 TaskState = TASK_TRACE;
                 CameraReady = 0U;
                 CameraCode = SERIAL_MAIXCAM_RESULT_NONE;
                 CameraRecorded = 0U;
                 JunctionPauseStartMs = 0U;
+                Main_ResetFinishAdvanceState();
                 Turn_Reset();
                 Main_ResetStartFinishLineState();
             }
@@ -166,7 +167,7 @@ int main(void)
                         if (g_grayParamProfile != 1U) {
                             PID_Grayscale_Init(0.5f, 0.0f, 0.15f);
                             PID_SetGrayscaleLeftWeights6(0.35f, 0.30f, 0.30f,
-                                                         0.20f, 0.08f, 0.05f);
+                                                         0.20f, 0.05f, 0.03f);
                             PID_Reset(GRAYSCALE);
                             g_grayParamProfile = 1U;
                         }
@@ -274,9 +275,11 @@ int main(void)
                                 break;
 
                             case TASK_FINISH:
-                                TaskState = TASK_TRACE;
-                                Main_ResetStartFinishLineState();
-                                Task_Finish();
+                                if (Main_RunFinishAdvance(BASE_LINE_SPEED, &DutyReady) != 0U) {
+                                    TaskState = TASK_TRACE;
+                                    Main_ResetStartFinishLineState();
+                                    Task_Finish();
+                                }
                                 break;
 
                             default:
@@ -405,9 +408,11 @@ int main(void)
 
                             case TASK_FINISH:
                                 /* 终点状态：复位横线计数，主动刹车，记录完成信息并返回菜单。 */
-                                TaskState = TASK_TRACE;
-                                Main_ResetStartFinishLineState();
-                                Task_Finish();
+                                if (Main_RunFinishAdvance(BASE_LINE_SPEED, &DutyReady) != 0U) {
+                                    TaskState = TASK_TRACE;
+                                    Main_ResetStartFinishLineState();
+                                    Task_Finish();
+                                }
                                 break;
 
                             default:
@@ -424,14 +429,14 @@ int main(void)
                     case 3U:       
                         {
                     //*********************参数定义*****************************
-                        static const float TraceSpeed   = 0.4f;
-                        static const float TurnOuterSpd = 0.2f;
-                        static const float TurnInnerSpd = -0.2f;
+                        static const float TraceSpeed   = 0.35f;
+                        static const float TurnOuterSpd = 0.25f;
+                        static const float TurnInnerSpd = 0.05f;
 
                         if (g_grayParamProfile != 1U) {
                             PID_Grayscale_Init(0.5f, 0.0f, 0.15f);
                             PID_SetGrayscaleLeftWeights6(0.35f, 0.30f, 0.30f,
-                                                         0.20f, 0.08f, 0.05f);
+                                                         0.20f, 0.05f, 0.03f);
                             // PID_Grayscale_Init(0.8f, 0.0f, 0.1f);
                             // PID_SetGrayscaleLeftWeights6(1.2f, 0.9f, 0.65f,
                             //                             0.40f, 0.22f, 0.08f);
@@ -543,9 +548,11 @@ int main(void)
                                 break;
 
                             case TASK_FINISH:
-                                TaskState = TASK_TRACE;
-                                Main_ResetStartFinishLineState();
-                                Task_Finish();
+                                if (Main_RunFinishAdvance(TraceSpeed, &DutyReady) != 0U) {
+                                    TaskState = TASK_TRACE;
+                                    Main_ResetStartFinishLineState();
+                                    Task_Finish();
+                                }
                                 break;
 
                             default:
@@ -559,32 +566,104 @@ int main(void)
 //*********************************************************************************************************
 //**********************************任务4：循迹，走到Y路口停止**************************************
 //*********************************************************************************************************
-                    case 4U:       // 任务4：循迹，Y路口停车
+                    case 4U:       // 任务4：颜色优先，无颜色随机转向
                         {
                     //*********************参数定义*****************************
-                        static const float TraceSpeed   = 0.4f;
+                        static const float TraceSpeed   = 0.3f;
                         static const float TurnOuterSpd = 0.2f;
                         static const float TurnInnerSpd = 0.1f;
 
                         if (g_grayParamProfile != 1U) {
-                            PID_Grayscale_Init(0.5f, 0.0f, 0.15f);
+                            PID_Grayscale_Init(0.5f, 0.0f, 0.25f);
                             PID_SetGrayscaleLeftWeights6(0.35f, 0.30f, 0.30f,
-                                                         0.20f, 0.08f, 0.05f);
+                                                         0.20f, 0.05f, 0.03f);
                             PID_Reset(GRAYSCALE);
                             g_grayParamProfile = 1U;
                         }
-                        if (PID_Gray_IsYJunction() != 0U) {
-                            DCMotor_Brake();
-                            PID_ResetAll();
-                            PID_Gray_ResetYJunctionState();
-                            TaskId = 0U;
-                            Menu_SetMode(SYS_MENU);
-                            OledFlag = 1U;
-                        } else {
-                            PID_ExecuteGrayCascade(TraceSpeed,
-                                                   0.0f,
-                                                   LINE_SPEED_DIFF_SCALE);
-                            DutyReady = 1U;
+                        switch (TaskState) {
+                            case TASK_TRACE:
+                                LineState = Main_CheckStartFinishLineCrossing();
+                                if (LineState >= 2U) {
+                                    TaskState = TASK_FINISH;
+                                }
+                                else if ((LineState == 0U) &&
+                                           (PID_Gray_IsYJunction() != 0U)) {
+                                    DCMotor_Brake();
+                                    PID_ResetAll();
+                                    CameraReady = 0U;
+                                    CameraCode = SERIAL_MAIXCAM_RESULT_NONE;
+                                    CameraRecorded = 0U;
+                                    CameraStartMs = SysMs;
+                                    SerialMaixCam_ClearPending();
+                                    (void)SerialMaixCam_SendStartRequest();
+                                    TaskState = TASK_CAMERA;
+                                } else {
+                                    PID_ExecuteGrayCascade(TraceSpeed,
+                                                           0.0f,
+                                                           LINE_SPEED_DIFF_SCALE);
+                                    DutyReady = 1U;
+                                }
+                                break;
+
+                            case TASK_CAMERA:
+                                if (CameraReady != 0U) {
+                                    if (CameraCode == SERIAL_MAIXCAM_RESULT_NONE) {
+                                        TurnDir = RandomDirection();
+                                    } else {
+                                        if (CameraRecorded == 0U) {
+                                            PatrolInfo_RecordResult(CameraCode);
+                                            CameraRecorded = 1U;
+                                        }
+                                        TurnDir = CameraDirection(CameraCode);
+                                    }
+                                    CameraReady = 0U;
+                                    CameraCode = SERIAL_MAIXCAM_RESULT_NONE;
+                                    (void)SerialMaixCam_SendStopRequest();
+                                    SerialMaixCam_ClearPending();
+                                    PID_ResetAll();
+                                    Turn_Start(TurnDir, TurnOuterSpd, TurnInnerSpd, SysMs);
+                                    TaskState = TASK_TURN;
+                                }
+                                else if ((uint32_t)(SysMs - CameraStartMs) >= CAMERA_TURN_TIMEOUT_MS) {
+                                    TurnDir = RandomDirection();
+                                    (void)SerialMaixCam_SendStopRequest();
+                                    SerialMaixCam_ClearPending();
+                                    PID_ResetAll();
+                                    Turn_Start(TurnDir, TurnOuterSpd, TurnInnerSpd, SysMs);
+                                    TaskState = TASK_TURN;
+                                }
+                                break;
+
+                            case TASK_TURN:
+                                Turn_Run();
+                                if (Turn_IsDone(SysMs, TURN_LINE_DETECT_DELAY_MS) != 0U) {
+                                    Turn_Reset();
+                                    PID_ResetAll();
+                                    DCMotor_Brake();
+                                    PID_Gray_ResetYJunctionState();
+                                    TaskState = TASK_TRACE;
+                                    PID_ExecuteGrayCascade(TraceSpeed,
+                                                           0.0f,
+                                                           LINE_SPEED_DIFF_SCALE);
+                                    DutyReady = 1U;
+                                } else {
+                                    DutyReady = 1U;
+                                }
+                                break;
+
+                            case TASK_FINISH:
+                                if (Main_RunFinishAdvance(TraceSpeed, &DutyReady) != 0U) {
+                                    TaskState = TASK_TRACE;
+                                    Main_ResetStartFinishLineState();
+                                    Task_Finish();
+                                }
+                                break;
+
+                            default:
+                                TaskState = TASK_TRACE;
+                                Turn_Reset();
+                                PID_ResetAll();
+                                break;
                         }
                         }  /* end case 4U block */
                         break;
@@ -594,14 +673,14 @@ int main(void)
                     case 5U:       // 任务5：循迹，Y路口转弯后停车
                         {
                     //*********************参数定义*****************************
-                        static const float TraceSpeed   = 0.4f;
-                        static const float TurnOuterSpd = 0.3f;
-                        static const float TurnInnerSpd = 0.06f;
+                        static const float TraceSpeed   = 0.3f;
+                        static const float TurnOuterSpd = 0.25f;
+                        static const float TurnInnerSpd = 0.05f;
 
                         if (g_grayParamProfile != 1U) {
-                            PID_Grayscale_Init(0.5f, 0.0f, 0.15f);
+                            PID_Grayscale_Init(0.5f, 0.0f, 0.25f);
                             PID_SetGrayscaleLeftWeights6(0.35f, 0.30f, 0.30f,
-                                                         0.20f, 0.08f, 0.05f);
+                                                         0.20f, 0.05f, 0.03f);
                             PID_Reset(GRAYSCALE);
                             g_grayParamProfile = 1U;
                         }
@@ -690,7 +769,7 @@ int main(void)
         /* 4) MaixCam 通信 */
         if (SerialMaixCam_Process() != 0U) {
             if ((Mode == SYS_TASK_RUN) &&
-                (TaskId == 1U || TaskId == 2U || TaskId == 3U) &&
+                (TaskId == 1U || TaskId == 2U || TaskId == 3U || TaskId == 4U) &&
                 (TaskState == TASK_CAMERA)) {
                 CameraCode = SerialMaixCam_GetResultCode(); //返回的值有效时会被 SerialMaixCam_Process 处理并存入 CameraCode，同时将 CameraReady 置位
                 CameraReady = 1U;

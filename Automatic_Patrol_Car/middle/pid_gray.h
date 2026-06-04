@@ -53,9 +53,16 @@ float PID_GetGrayscaleWeightedPosition(void);
 /**
  * @brief  检测Y型岔路口
  * @retval 1: 检测到稳定的Y型岔路口, 0: 未检测到
- * @note   带防抖：左右分支同时检测到线、中间7~8路无线时1次确认，连续5次未检测取消
+ * @note   带防抖：总数>=5、左右分支各>=2、中间7~8路无线时2次确认，连续5次未检测取消
  */
 uint8_t PID_Gray_IsYJunction(void);
+
+/**
+ * @brief  检测Y型岔路口（宽松版本）
+ * @retval 1: 检测到稳定的Y型岔路口, 0: 未检测到
+ * @note   带防抖：总数>=4、左右分支各>=1、中间7~8路无线时2次确认，连续5次未检测取消
+ */
+uint8_t PID_Gray_IsYJunctionLoose(void);
 
 /**
  * @brief  重置Y型岔路口检测的防抖状态

@@ -483,20 +483,38 @@ int Logic_Get_Turn_Direction2(uint8_t cameraColor)
             int cost_L = edge_weight[curr_node][node_L] + dist_to_O[node_L];
             int cost_R = edge_weight[curr_node][node_R] + dist_to_O[node_R];
 
-            if (cost_L < cost_R) {
+            // if (cost_L < cost_R) {
+            //     turn_cmd = TURN_LEFT;
+            // } else if (cost_R < cost_L) {
+            //     turn_cmd = TURN_RIGHT;
+            // }
+            // // 距离相等时，选走过次数少的方向（探索差异）
+            // else {
+            //     int vL = edge_visited[curr_node][node_L];
+            //     int vR = edge_visited[curr_node][node_R];
+            //     if (vL < vR) {
+            //         turn_cmd = TURN_LEFT;
+            //     } else {
+            //         turn_cmd = TURN_RIGHT;
+            //     }
+            // }
+            int vL = edge_visited[curr_node][node_L];
+            int vR = edge_visited[curr_node][node_R];
+            if (vL < vR) {
                 turn_cmd = TURN_LEFT;
-            } else if (cost_R < cost_L) {
+            } 
+            else if(vL > vR)
+            {
                 turn_cmd = TURN_RIGHT;
             }
-            // 距离相等时，选走过次数少的方向（探索差异）
+            else if (cost_L < cost_R) {
+                turn_cmd = TURN_LEFT;
+            } 
+            else if (cost_R < cost_L) {
+                turn_cmd = TURN_RIGHT;
+            }
             else {
-                int vL = edge_visited[curr_node][node_L];
-                int vR = edge_visited[curr_node][node_R];
-                if (vL < vR) {
-                    turn_cmd = TURN_LEFT;
-                } else {
-                    turn_cmd = TURN_RIGHT;
-                }
+                turn_cmd = TURN_RIGHT;
             }
         }
     }

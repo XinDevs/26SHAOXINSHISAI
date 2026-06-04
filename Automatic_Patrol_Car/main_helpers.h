@@ -38,6 +38,9 @@ void Main_ResetStartFinishLineState(void);
  */
 uint8_t Main_CheckStartFinishLineCrossing(void);
 
+void Main_ResetFinishAdvanceState(void);
+uint8_t Main_RunFinishAdvance(float traceSpeed, uint8_t *dutyReady);
+
 #ifdef __cplusplus
 }
 #endif
